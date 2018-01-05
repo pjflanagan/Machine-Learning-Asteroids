@@ -26,8 +26,8 @@ App.Main = function(game){
 
 App.Main.prototype = {
 	preload : function(){
-		this.game.load.spritesheet('imgBird', 'assets/img_bird.png', 36, 36, 20);
-		this.game.load.spritesheet('imgTree', 'assets/img_tree.png', 90, 400, 2);
+		this.game.load.spritesheet('imgShip', 'assets/img_ship.png', 36, 36, 20);
+		this.game.load.spritesheet('imgAsteroid', 'assets/img_asteroid_0.png', 360, 360, 1);
 		this.game.load.spritesheet('imgButtons', 'assets/img_buttons.png', 110, 40, 3);
 		
 		this.game.load.image('imgTarget', 'assets/img_target.png');
@@ -47,8 +47,8 @@ App.Main.prototype = {
 		this.scale.pageAlignVertically = true;
 		this.scale.pageAlignHorizontally = true;
 
-		// set a blue color for the background of the stage
-		this.game.stage.backgroundColor = "#89bfdc";
+		// set a black color for the background of the stage
+		this.game.stage.backgroundColor = "#1C1C1C";
 		
 		// keep game running if it loses the focus
 		this.game.stage.disableVisibilityChange = true;
@@ -57,31 +57,30 @@ App.Main.prototype = {
 		this.game.physics.startSystem(Phaser.Physics.ARCADE);
 
 		// set the gravity of the world
-		this.game.physics.arcade.gravity.y = 1300;
+		this.game.physics.arcade.gravity.y = 0;
 		
 		// create a new Genetic Algorithm with a population of 10 units which will be evolving by using 4 top units
 		this.GA = new GeneticAlgorithm(10, 4);
 		
-		// create a BirdGroup which contains a number of Bird objects
-		this.BirdGroup = this.game.add.group();
+		// create a ShipGroup which contains a number of Ship objects
+		this.ShipGroup = this.game.add.group();
 		for (var i = 0; i < this.GA.max_units; i++){
-			this.BirdGroup.add(new Bird(this.game, 0, 0, i));
+			this.ShipGroup.add(new Ship(this.game, 0, 0, i));
 		}		
 	
-		// create a BarrierGroup which contains a number of Tree Groups
-		// (each Tree Group contains a top and bottom Tree object)
-		this.BarrierGroup = this.game.add.group();		
+		// create a AsteroidGroup which contains a number of Asteroid objects
+		this.AsteroidGroup = this.game.add.group();		
 		for (var i = 0; i < 4; i++){
-			new TreeGroup(this.game, this.BarrierGroup, i);
+			new Asteroid(this.game, this.AsteroidGroup, i);
 		}
 		
 		// create a Target Point sprite
-		this.TargetPoint = this.game.add.sprite(0, 0, 'imgTarget');
-		this.TargetPoint.anchor.setTo(0.5);
+		// this.TargetPoint = this.game.add.sprite(0, 0, 'imgTarget');
+		// this.TargetPoint.anchor.setTo(0.5);
 		
 		// create a scrolling Ground object
-		this.Ground = this.game.add.tileSprite(0, this.game.height-100, this.game.width-370, 100, 'imgGround');
-		this.Ground.autoScroll(-200, 0);
+		// this.Ground = this.game.add.tileSprite(0, this.game.height-100, this.game.width-370, 100, 'imgGround');
+		// this.Ground.autoScroll(-200, 0);
 		
 		// create a BitmapData image for drawing head-up display (HUD) on it
 		this.bmdStatus = this.game.make.bitmapData(370, this.game.height);
@@ -111,9 +110,9 @@ App.Main.prototype = {
 		
 		// create buttons
 		this.btnRestart = this.game.add.button(920, 620, 'imgButtons', this.onRestartClick, this, 0, 0);
-		this.btnMore = this.game.add.button(1040, 620, 'imgButtons', this.onMoreGamesClick, this, 2, 2);
+		//this.btnMore = this.game.add.button(1040, 620, 'imgButtons', this.onMoreGamesClick, this, 2, 2);
 		this.btnPause = this.game.add.button(1160, 620, 'imgButtons', this.onPauseClick, this, 1, 1);
-		this.btnLogo = this.game.add.button(910, 680, 'imgLogo', this.onMoreGamesClick, this);
+		//this.btnLogo = this.game.add.button(910, 680, 'imgLogo', this.onMoreGamesClick, this);
 		
 		// create game paused info
 		this.sprPause = this.game.add.sprite(455, 360, 'imgPause');
@@ -150,21 +149,21 @@ App.Main.prototype = {
 				this.distance = 0;
 				
 				// reset barriers
-				this.BarrierGroup.forEach(function(barrier){
+				this.AsteroidGroup.forEach(function(barrier){
 					barrier.restart(700 + barrier.index * this.BARRIER_DISTANCE);
 				}, this);
 				
 				// define pointer to the first barrier
-				this.firstBarrier = this.BarrierGroup.getAt(0);
+				this.firstBarrier = this.AsteroidGroup.getAt(0);
 				
 				// define pointer to the last barrier
-				this.lastBarrier = this.BarrierGroup.getAt(this.BarrierGroup.length-1);
+				this.lastBarrier = this.AsteroidGroup.getAt(this.AsteroidGroup.length-1);
 				
 				// define pointer to the current target barrier
 				this.targetBarrier = this.firstBarrier;
 				
 				// start a new population of birds
-				this.BirdGroup.forEach(function(bird){
+				this.ShipGroup.forEach(function(bird){
 					bird.restart(this.GA.iteration);
 					
 					if (this.GA.Population[bird.index].isWinner){
@@ -186,23 +185,23 @@ App.Main.prototype = {
 				
 				var isNextTarget = false; // flag to know if we need to set the next target barrier
 				
-				this.BirdGroup.forEachAlive(function(bird){
+				this.ShipGroup.forEachAlive(function(ship){
 					// calculate the current fitness and the score for this bird
-					bird.fitness_curr = this.distance - this.game.physics.arcade.distanceBetween(bird, this.TargetPoint);
-					bird.score_curr = this.score;
+					ship.fitness_curr = this.distance - this.game.physics.arcade.distanceBetween(ship, this.TargetPoint);
+					ship.score_curr = this.score;
 					
 					// check collision between a bird and the target barrier
-					this.game.physics.arcade.collide(bird, this.targetBarrier, this.onDeath, null, this);
+					this.game.physics.arcade.collide(ship, this.targetBarrier, this.onDeath, null, this);
 					
-					if (bird.alive){
+					if (ship.alive){
 						// check if a bird passed through the gap of the target barrier
-						if (bird.x > this.TargetPoint.x) isNextTarget = true;
+						if (ship.x > this.TargetPoint.x) isNextTarget = true;
 						
 						// check if a bird flies out of vertical bounds
-						if (bird.y<0 || bird.y>610) this.onDeath(bird);
+						if (ship.y<0 || ship.y>610) this.onDeath(ship);
 						
 						// perform a proper action (flap yes/no) for this bird by activating its neural network
-						this.GA.activateBrain(bird, this.TargetPoint);
+						this.GA.activateBrain(ship, this.TargetPoint);
 					}
 				}, this);
 				
@@ -239,7 +238,7 @@ App.Main.prototype = {
 		this.bmdStatus.fill(180, 180, 180); // clear bitmap data by filling it with a gray color
 		this.bmdStatus.rect(0, 0, this.bmdStatus.width, 35, "#8e8e8e"); // draw the HUD header rect
 			
-		this.BirdGroup.forEach(function(bird){
+		this.ShipGroup.forEach(function(bird){
 			var y = 85 + bird.index*50;
 								
 			this.bmdStatus.draw(bird, 25, y-25); // draw bird's image
@@ -262,7 +261,7 @@ App.Main.prototype = {
 	},
 	
 	getNextBarrier : function(index){
-		return this.BarrierGroup.getAt((index + 1) % this.BarrierGroup.length);
+		return this.AsteroidGroup.getAt((index + 1) % this.AsteroidGroup.length);
 	},
 	
 	onDeath : function(bird){
@@ -270,7 +269,7 @@ App.Main.prototype = {
 		this.GA.Population[bird.index].score = bird.score_curr;
 					
 		bird.death();
-		if (this.BirdGroup.countLiving() == 0) this.state = this.STATE_GAMEOVER;
+		if (this.ShipGroup.countLiving() == 0) this.state = this.STATE_GAMEOVER;
 	},
 	
 	onRestartClick : function(){
@@ -297,51 +296,10 @@ App.Main.prototype = {
 }
 
 /***********************************************************************************
-/* TreeGroup Class extends Phaser.Group
-/***********************************************************************************/	
-	
-var TreeGroup = function(game, parent, index){
-	Phaser.Group.call(this, game, parent);
-
-	this.index = index;
-
-	this.topTree = new Tree(this.game, 0); // create a top Tree object
-	this.bottomTree = new Tree(this.game, 1); // create a bottom Tree object
-	
-	this.add(this.topTree); // add the top Tree to this group
-	this.add(this.bottomTree); // add the bottom Tree to this group
-};
-
-TreeGroup.prototype = Object.create(Phaser.Group.prototype);
-TreeGroup.prototype.constructor = TreeGroup;
-
-TreeGroup.prototype.restart = function(x) {
-	this.topTree.reset(0, 0);
-	this.bottomTree.reset(0, this.topTree.height + 130);
-
-	this.x = x;
-	this.y = this.game.rnd.integerInRange(110-this.topTree.height, -20);
-
-	this.setAll('body.velocity.x', -200);
-};
-
-TreeGroup.prototype.getWorldX = function() {
-	return this.topTree.world.x;
-};
-
-TreeGroup.prototype.getGapX = function() {
-	return this.bottomTree.world.x + this.bottomTree.width;
-};
-
-TreeGroup.prototype.getGapY = function() {
-	return this.bottomTree.world.y - 65;
-};
-
-/***********************************************************************************
-/* Tree Class extends Phaser.Sprite
+/* Asteroid Class extends Phaser.Sprite
 /***********************************************************************************/
 
-var Tree = function(game, frame) {
+var Asteroid = function(game, frame) {
 	Phaser.Sprite.call(this, game, 0, 0, 'imgTree', frame);
 	
 	this.game.physics.arcade.enableBody(this);
@@ -350,32 +308,32 @@ var Tree = function(game, frame) {
 	this.body.immovable = true;
 };
 
-Tree.prototype = Object.create(Phaser.Sprite.prototype);
-Tree.prototype.constructor = Tree;
+Asteroid.prototype = Object.create(Phaser.Sprite.prototype);
+Asteroid.prototype.constructor = Asteroid;
 
 /***********************************************************************************
-/* Bird Class extends Phaser.Sprite
+/* Ship Class extends Phaser.Sprite
 /***********************************************************************************/
 
-var Bird = function(game, x, y, index) {
-	Phaser.Sprite.call(this, game, x, y, 'imgBird');
+var Ship = function(game, x, y, index) {
+	Phaser.Sprite.call(this, game, x, y, 'imgShip');
 	   
 	this.index = index;
 	this.anchor.setTo(0.5);
 	  
 	// add flap animation and start to play it
 	var i=index*2;
-	this.animations.add('flap', [i, i+1]);
-	this.animations.play('flap', 8, true);
+	this.animations.add('gas', [i, i+1]);
+	this.animations.play('gas', 8, true);
 
 	// enable physics on the bird
 	this.game.physics.arcade.enableBody(this);
 };
 
-Bird.prototype = Object.create(Phaser.Sprite.prototype);
-Bird.prototype.constructor = Bird;
+Ship.prototype = Object.create(Phaser.Sprite.prototype);
+Ship.prototype.constructor = Ship;
 
-Bird.prototype.restart = function(iteration){
+Ship.prototype.restart = function(iteration){
 	this.fitness_prev = (iteration == 1) ? 0 : this.fitness_curr;
 	this.fitness_curr = 0;
 	
@@ -386,11 +344,11 @@ Bird.prototype.restart = function(iteration){
 	this.reset(150, 300 + this.index * 20);
 };
 
-Bird.prototype.flap = function(){
+Ship.prototype.gas = function(){
 	this.body.velocity.y = -400;
 };
 
-Bird.prototype.death = function(){
+Ship.prototype.death = function(){
 	this.alpha = 0.5;
 	this.kill();
 };

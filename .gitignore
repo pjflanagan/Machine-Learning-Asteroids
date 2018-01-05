@@ -1,2 +1,3 @@
-original/*
+original/
 **/*.DS_Store
+**/psd/
