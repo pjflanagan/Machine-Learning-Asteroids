@@ -195,10 +195,10 @@ App.Main.prototype = {
 						]; 
 
 						// perform a proper action by activating its neural network
-						if(ship.index === 0)
-							this.player(ship);
-						else 
-							this.GA.activateBrain(ship, input);
+						// if(ship.index === 0)
+						//	this.player(ship);
+						// else 
+						this.GA.activateBrain(ship, input);
 					}
 				}, this);
 				
@@ -339,8 +339,7 @@ var Ship = function(game, x, y, index, bulletGroup) {
 	this.index = index;
 	this.angle = -90;
 	this.anchor.set(0.5, 0.5);
-	this.score = 0;
-	this.moved = false;
+	this.restart();
 	this.fireable = true;
 	this.bullets = bulletGroup;
 	  
@@ -360,9 +359,9 @@ Ship.prototype.constructor = Ship;
 
 Ship.prototype.restart = function(iteration){	
 	this.score = 0;
-	moved = false;
+	this.moved = false;
 	this.alpha = 1;
-	this.reset(CENTER_X, CENTER_Y);
+	this.reset(CENTER_X - 200 + Math.random() * 400, CENTER_Y - 200 + Math.random() * 400);
 };
 
 Ship.prototype.gas = function(){
