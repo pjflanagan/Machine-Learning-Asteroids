@@ -7,6 +7,18 @@ var H = 1200;
 var CENTER_X = W/2,
 	CENTER_Y = H/2;
 
+var shipProperties = {
+	acceleration: 220,
+    drag: 160,
+    maxVelocity: 220,
+    angularVelocity: 500,
+};
+
+// Converts from degrees to radians.
+Math.radians = function(degrees) {
+	return degrees * Math.PI / 180;
+};
+
 window.onload = function () {
 	var game = new Phaser.Game(W, H, Phaser.CANVAS, 'game');
 	
@@ -47,9 +59,6 @@ App.Main.prototype = {
 		
 		// start the Phaser arcade physics engine
 		this.game.physics.startSystem(Phaser.Physics.ARCADE);
-
-		// set the gravity of the world
-		this.game.physics.arcade.gravity.y = 0;
 		
 		// create a new Genetic Algorithm with a population of 10 units which will be evolving by using 4 top units
 		this.GA = new GeneticAlgorithm(10, 4);
@@ -65,6 +74,10 @@ App.Main.prototype = {
 		for (var i = 0; i < 6; i++){
 			new Asteroid(this.game, this.AsteroidGroup, i);
 		}
+
+		this.key_left = this.game.input.keyboard.addKey(Phaser.Keyboard.LEFT);
+        this.key_right = this.game.input.keyboard.addKey(Phaser.Keyboard.RIGHT);
+        this.key_thrust = this.game.input.keyboard.addKey(Phaser.Keyboard.UP);
 				
 		// set initial App state
 		this.state = this.STATE_INIT;
@@ -81,7 +94,6 @@ App.Main.prototype = {
 				
 			case this.STATE_START: // start/restart the game
 				// update text objects
-				this.score = 0;
 				this.time = 0;
 				
 				// start a new population of ships
@@ -106,18 +118,28 @@ App.Main.prototype = {
 						// check if a bird flies out of bounds
 						if (ship.y < 0 || ship.y > H || ship.x < 0 || ship.x > W) this.onDeath(ship);
 
-						var closestAsteroids = [];
+						var closestAsteroids = [
+							Math.random()*40 - 20,
+							Math.random()*40 - 20,
+							Math.random()*40 - 20,
+							Math.random()*40 - 20,
+							Math.random()*40 - 20,
+							Math.random()*40 - 20
+						];
+
+						var velocity = Math.sqrt(Math.pow(ship.body.velocity.x,2) + Math.pow(ship.body.velocity.y,2));
 						
-						var input = [ship.orientation];
+						var input = [Math.radians(ship.body.rotation), velocity / shipProperties.maxVelocity];
 						// perform a proper action (flap yes/no) for this bird by activating its neural network
-						this.GA.activateBrain(ship, input.concat(closestAsteroids));
+						if(ship.index == 0)
+							this.player(ship);
+						else 
+							this.GA.activateBrain(ship, input.concat(closestAsteroids));
 					}
 				}, this);
 				
 				// increase the time alive
-				this.distance += 1;
-				
-				this.drawStatus();				
+				this.time += 1;
 				break;
 				
 			case this.STATE_GAMEOVER: // when all birds are killed evolve the population
@@ -128,36 +150,26 @@ App.Main.prototype = {
 				break;
 		}
 	},
-	
-	drawStatus : function(){
-		this.bmdStatus.fill(180, 180, 180); // clear bitmap data by filling it with a gray color
-		this.bmdStatus.rect(0, 0, this.bmdStatus.width, 35, "#8e8e8e"); // draw the HUD header rect
-			
-		this.ShipGroup.forEach(function(bird){
-			var y = 85 + bird.index*50;
-								
-			this.bmdStatus.draw(bird, 25, y-25); // draw bird's image
-			this.bmdStatus.rect(0, y, this.bmdStatus.width, 2, "#888"); // draw line separator
-			
-			if (bird.alive){
-				var brain = this.GA.Population[bird.index].toJSON();
-				var scale = this.GA.SCALE_FACTOR*0.02;
-				
-				this.bmdStatus.rect(62, y, 9, -(50 - brain.neurons[0].activation/scale), "#000088"); // input 1
-				this.bmdStatus.rect(90, y, 9, brain.neurons[1].activation/scale, "#000088"); // input 2
-				
-				if (brain.neurons[brain.neurons.length-1].activation<0.5) this.bmdStatus.rect(118, y, 9, -20, "#880000"); // output: flap = no
-				else this.bmdStatus.rect(118, y, 9, -40, "#008800"); // output: flap = yes
-			}
-			
-			// draw bird's fitness and score
-			this.txtStatusCurr[bird.index].setText(bird.fitness_curr.toFixed(2)+"\n" + bird.score_curr);
-		}, this);
+
+	player : function(ship){
+		if (this.key_left.isDown) {
+			ship.rotate(1);
+		} else if (this.key_right.isDown) {
+			ship.rotate(0);
+		} else {
+			ship.rotate(.5);
+		}
+		
+		if (this.key_thrust.isDown) {
+			ship.gas();
+		} else {
+			ship.gasOff();
+		}
 	},
 	
 	onDeath : function(ship){
-		this.GA.Population[bird.index].fitness = ship.fitness_curr;
-		this.GA.Population[bird.index].score = ship.score_curr;
+		this.GA.Population[ship.index].fitness = this.time + ship.score;
+		this.GA.Population[ship.index].score = ship.score;
 					
 		ship.death();
 		if (this.ShipGroup.countLiving() == 0) this.state = this.STATE_GAMEOVER;
@@ -204,18 +216,20 @@ Asteroid.prototype.constructor = Asteroid;
 
 var Ship = function(game, x, y, index) {
 	Phaser.Sprite.call(this, game, x, y, 'imgShip');
-	   
 	this.index = index;
-	this.anchor.setTo(0.5);
-	this.angle = Math.random() * 360;
+	this.angle = -90;
+	this.anchor.set(0.5, 0.5);
+	this.score = 0;
 	  
 	// add flap animation and start to play it
 	var i=index*2;
-	this.animations.add('gas', [i, i+1]);
-	this.animations.play('gas', 8, true);
+	this.animations.add('gas', [i+1]);
+	this.animations.add('gasOff', [i]);
 
 	// enable physics on the bird
-	this.game.physics.arcade.enableBody(this);
+	this.game.physics.enable(this, Phaser.Physics.ARCADE);
+	this.body.drag.set(shipProperties.drag);
+	this.body.maxVelocity.set(shipProperties.maxVelocity);
 };
 
 Ship.prototype = Object.create(Phaser.Sprite.prototype);
@@ -233,29 +247,26 @@ Ship.prototype.restart = function(iteration){
 };
 
 Ship.prototype.gas = function(){
-	this.body.velocity.y = -400;
+	this.animations.play('gas', 1, true);
+	this.game.physics.arcade.accelerationFromRotation(Math.radians(this.body.rotation), shipProperties.acceleration, this.body.acceleration);
 };
+
+Ship.prototype.gasOff = function(){
+	this.animations.play('gasOff', 1, true);
+	this.body.acceleration.set(0);
+}
+
+Ship.prototype.rotate = function(rotation){
+	this.body.angularVelocity = (.5 - rotation) * shipProperties.angularVelocity;
+}
+
+Ship.prototype.shoot = function(){
+	//release a bullet sprite
+}
 
 Ship.prototype.death = function(){
 	this.alpha = 0.5;
 	this.kill();
 };
 
-/*******************************************************************************
-/* Text Class extends Phaser.BitmapText
-/******************************************************************************/
-
-var Text = function(game, x, y, text, align, font){
-	Phaser.BitmapText.call(this, game, x, y, font, text, 16);
-	
-	this.align = align;
-	
-	if (align == "right") this.anchor.setTo(1, 0);
-	else this.anchor.setTo(0.5);
-	
-	this.game.add.existing(this);
-};
-
-Text.prototype = Object.create(Phaser.BitmapText.prototype);
-Text.prototype.constructor = Text;
 
