@@ -50,9 +50,11 @@ GeneticAlgorithm.prototype = {
 	activateBrain : function(ship, inputs){		
 		// calculate outputs by activating synaptic neural network of this bird
 		var outputs = this.Population[ship.index].activate(inputs);
-		if (outputs[0] > 0.5) ship.shoot();
-		if (outputs[0] < 0.6) ship.gas();
-		else ship.gasOff();
+		if (outputs[0] > 0.5){
+			ship.shoot();
+			ship.gasOff();
+		}
+		else ship.gas();
 		ship.rotate(outputs[1]);
 	},
 	
