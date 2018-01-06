@@ -31,8 +31,8 @@ GeneticAlgorithm.prototype = {
 		
 		for (var i=0; i<this.max_units; i++){
 			// create a new unit by generating a random Synaptic neural network
-			// with 2 neurons in the input layer, 6 neurons in the hidden layer and 1 neuron in the output layer
-			var newUnit = new synaptic.Architect.Perceptron(8, 8, 2);
+			// with 8 neurons in the input layer, 8 neurons in the hidden layer and 3 neuron in the output layer
+			var newUnit = new synaptic.Architect.Perceptron(8, 6, 4);
 			
 			// set additional parameters for the new unit
 			newUnit.index = i;
@@ -48,14 +48,13 @@ GeneticAlgorithm.prototype = {
 	// activates the neural network of an unit from the population 
 	// to calculate an output action according to the inputs
 	activateBrain : function(ship, inputs){		
-		// calculate outputs by activating synaptic neural network of this bird
+		// calculate outputs by activating synaptic neural network of this ship
 		var outputs = this.Population[ship.index].activate(inputs);
-		if (outputs[0] > 0.5){
-			ship.shoot();
-			ship.gasOff();
-		}
+
+		if(outputs[0] > 0.5) ship.gasOff();
 		else ship.gas();
-		ship.rotate(outputs[1]);
+		if(outputs[1] > 0.5) ship.shoot();
+		if(outputs[2] > 0.5) ship.rotate(Math.round(outputs[3])); 
 	},
 	
 	// evolves the population by performing selection, crossover and mutations on the units

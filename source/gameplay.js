@@ -8,8 +8,8 @@ var CENTER_X = W/2,
 	CENTER_Y = H/2;
 
 var shipProperties = {
-	acceleration: 220,
-    drag: 160,
+	acceleration: 320,
+    drag: 40,
     maxVelocity: 220,
 	angularVelocity: 500,
 	names: [
@@ -27,9 +27,9 @@ var shipProperties = {
 };
 
 var bulletProperties = {
-    speed: 400,
-    interval: 600,
-    lifespan: 640,
+    speed: 600,
+    interval: 680,
+    lifespan: 600,
     maxCount: 90,
 }
 
@@ -143,7 +143,6 @@ App.Main.prototype = {
 				for (var i = 0; i < asteroidProperties.startingAsteroids; i++){
 					this.AsteroidGroup.add(new Asteroid(this.game, 0, 0, 0, this.AsteroidGroup));
 				}
-				this.AsteroidGroup.add(new Asteroid(this.game, 0, H/2, 0, this.AsteroidGroup));
 							
 				this.state = this.STATE_PLAY;
 				break;
@@ -156,10 +155,9 @@ App.Main.prototype = {
 
 				this.AsteroidGroup.forEachExists(function(asteroid){
 					this.checkBoundaries(asteroid);
-					/*this.AsteroidGroup.forEachExists(function(asteroid_2){
-						if(asteroid.index != asteroid_2.index)
-							this.game.physics.arcade.collide(asteroid, asteroid_2);
-					}, this);*/
+					// this.AsteroidGroup.forEachExists(function(asteroid_2){
+					// 	this.game.physics.arcade.collide(asteroid, asteroid_2);
+					// }, this);
 				}, this);
 				
 				this.ShipGroup.forEachAlive(function(ship){
@@ -197,9 +195,9 @@ App.Main.prototype = {
 						]; 
 
 						// perform a proper action by activating its neural network
-						//if(ship.index === 0)
-						//	this.player(ship);
-						//else 
+						if(ship.index === 0)
+							this.player(ship);
+						else 
 							this.GA.activateBrain(ship, input);
 					}
 				}, this);
@@ -253,6 +251,8 @@ App.Main.prototype = {
 			ship.gasOff();
 		}
 
+		ship.score = 0;
+
 		if (this.key_fire.isDown) {
 			ship.shoot();
 		}
@@ -298,13 +298,6 @@ App.Main.prototype = {
 
 var Asteroid = function(game, x, y, s, g) {
 	//make it so they start off screen and then glide in screen when x and y are 0
-	//make it so one goes directly toward the center to force out campers
-	var v = 0;
-	var a = 0;
-	if(x === 0 & y === H/2){
-		v = 300;
-		a = 0;
-	}
 	//other ones burst out of an asteroid that got shot so they retain xy
 	Phaser.Sprite.call(this, game, x, y, `imgAsteroid-${s}`);
 	this.size = s;
@@ -317,8 +310,8 @@ var Asteroid = function(game, x, y, s, g) {
 	this.anchor.set(0.5, 0.5);
 	this.body.angularVelocity = this.game.rnd.integerInRange(asteroidProperties.size[this.size].minAngularVelocity, asteroidProperties.size[this.size].maxAngularVelocity);
 
-	var randomAngle = (a != 0) ? a : this.game.math.degToRad(this.game.rnd.angle());
-	var randomVelocity = (v != 0) ? v :  this.game.rnd.integerInRange(asteroidProperties.size[this.size].minVelocity, asteroidProperties.size[this.size].maxVelocity);
+	var randomAngle = this.game.math.degToRad(this.game.rnd.angle());
+	var randomVelocity = this.game.rnd.integerInRange(asteroidProperties.size[this.size].minVelocity, asteroidProperties.size[this.size].maxVelocity);
 
 	game.physics.arcade.velocityFromRotation(randomAngle, randomVelocity, this.body.velocity);
 	
