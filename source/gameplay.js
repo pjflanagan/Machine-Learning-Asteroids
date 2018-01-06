@@ -16,20 +16,22 @@ var shipProperties = {
 
 var bulletProperties = {
     speed: 400,
-    interval: 250,
-    lifespan: 2000,
-    maxCount: 30,
+    interval: 400,
+    lifespan: 640,
+    maxCount: 90,
 }
 
 var asteroidProperties = {
     startingAsteroids: 10,
     maxAsteroids: 30,
-    incrementAsteroids: 1,
+	incrementAsteroids: 1,
+	maxSize: 2,
+	score: 100,
     
     size: [
-		{ minVelocity: 50, maxVelocity: 150, minAngularVelocity: 0, maxAngularVelocity: 200, score: 20, nextSize: 1 },
-    	{ minVelocity: 50, maxVelocity: 200, minAngularVelocity: 0, maxAngularVelocity: 200, score: 50, nextSize: 2 },
-		{ minVelocity: 50, maxVelocity: 300, minAngularVelocity: 0, maxAngularVelocity: 200, score: 100 }
+		{ minVelocity: 80, maxVelocity: 120, minAngularVelocity: 0, maxAngularVelocity: 200 },
+    	{ minVelocity: 80, maxVelocity: 180, minAngularVelocity: 0, maxAngularVelocity: 200 },
+		{ minVelocity: 80, maxVelocity: 220, minAngularVelocity: 0, maxAngularVelocity: 200 }
 	]
 };
 
@@ -61,7 +63,10 @@ App.Main = function(game){
 App.Main.prototype = {
 	preload : function(){
 		this.game.load.spritesheet('imgShip', 'assets/img_ship.png', 36, 36, 20);
-		this.game.load.spritesheet('imgAsteroid-0', 'assets/img_asteroid_0.png', 344, 334, 1);		
+		this.game.load.spritesheet('imgAsteroid-0', 'assets/img_asteroid_0.png', 344, 334, 1);	
+		this.game.load.spritesheet('imgAsteroid-1', 'assets/img_asteroid_1.png', 242, 235, 1);	
+		this.game.load.spritesheet('imgAsteroid-2', 'assets/img_asteroid_2.png', 80, 78, 1);
+		this.game.load.spritesheet('imgBullet', 'assets/img_bullet.png', 18, 18, 3);		
 	},
 	
 	create : function(){
@@ -81,21 +86,24 @@ App.Main.prototype = {
 		
 		// create a new Genetic Algorithm with a population of 10 units which will be evolving by using 4 top units
 		this.GA = new GeneticAlgorithm(10, 4);
+
+		// create a BulletGroup which contians the bullets
+		this.BulletGroup = this.game.add.group();
 		
 		// create a ShipGroup which contains a number of Ship objects
 		this.ShipGroup = this.game.add.group();
 		for (var i = 0; i < this.GA.max_units; i++){
-			this.ShipGroup.add(new Ship(this.game, CENTER_X, CENTER_Y, i));
+			this.ShipGroup.add(new Ship(this.game, CENTER_X, CENTER_Y, i, this.BulletGroup));
 		}		
 	
 		// create a AsteroidGroup which contains a number of Asteroid objects
 		this.AsteroidGroup = this.game.add.group();
-		this.asteroidsCount = asteroidProperties.startingAsteroids;
-
+		
 		// create keys for a regular player to play
 		this.key_left = this.game.input.keyboard.addKey(Phaser.Keyboard.LEFT);
         this.key_right = this.game.input.keyboard.addKey(Phaser.Keyboard.RIGHT);
 		this.key_thrust = this.game.input.keyboard.addKey(Phaser.Keyboard.UP);
+		this.key_fire = this.game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
 				
 		// set initial App state
 		this.state = this.STATE_INIT;
@@ -120,46 +128,52 @@ App.Main.prototype = {
 				}, this);
 
 				// init the asteroids
-				for (var i = 0; i < this.asteroidsCount; i++){
-					this.AsteroidGroup.add(new Asteroid(this.game, -1, -1, 0, i, this.AsteroidGroup));
+				for (var i = 0; i < asteroidProperties.startingAsteroids; i++){
+					this.AsteroidGroup.add(new Asteroid(this.game, 0, 0, 0, this.AsteroidGroup));
 				}
+				this.AsteroidGroup.add(new Asteroid(this.game, 0, H/2, 0, this.AsteroidGroup));
 							
 				this.state = this.STATE_PLAY;
 				break;
 				
 			case this.STATE_PLAY: // play Flappy Bird game by using genetic algorithm AI
 
-				this.AsteroidGroup.forEachExists(this.checkBoundaries, this);
+				this.game.physics.arcade.overlap(this.BulletGroup, this.AsteroidGroup, this.asteroidHit, null, this);
+				this.game.physics.arcade.overlap(this.ShipGroup, this.AsteroidGroup, this.asteroidCollision, null, this);
+
+				this.AsteroidGroup.forEachExists(function(asteroid){
+					this.checkBoundaries(asteroid);
+					/*this.AsteroidGroup.forEachExists(function(asteroid_2){
+						if(asteroid.index != asteroid_2.index)
+							this.game.physics.arcade.collide(asteroid, asteroid_2);
+					}, this);*/
+				}, this);
 				
 				this.ShipGroup.forEachAlive(function(ship){
-					// calculate the current fitness and the score for this ship
-					ship.fitness = this.time + ship.score;
 					
 					var asteroidDistance = [
-						{ d: ship.x - 0, dx: ship.x - 0, dy: 0},
-						{ d: ship.x - W, dx: ship.x - W, dy: 0},
-						{ d: ship.y - 0, dx: 0, dy: ship.y - H},
-						{ d: ship.y - H, dx: 0, dy: ship.y - H}
-					]; // {d dx dy}
+						{ d: ship.body.x - 0, dx: ship.body.x - 0, dy: 0},
+						{ d: ship.body.x - W, dx: ship.body.x - W, dy: 0},
+						{ d: ship.body.y - 0, dx: 0, dy: ship.body.y - H},
+						{ d: ship.body.y - H, dx: 0, dy: ship.body.y - H}
+					]; 
 					
-					// check collision between a ship and 
+					// get the three closest asteroids
 					this.AsteroidGroup.forEachExists(function(asteroid){
-						this.game.physics.arcade.collide(ship, asteroid, this.onDeath, null, this);
 						var dx = ship.body.x - asteroid.body.x, 
 							dy = ship.body.y - asteroid.body.y;
 						asteroidDistance.push({
-							d: Math.sqrt(dx*dx + dy+dy),
+							d: Math.abs(Math.sqrt(dx*dx + dy+dy)),
 							dx: dx,
 							dy: dy
 						});
 					}, this);
-
 					asteroidDistance.sort(function(a, b) {
-						return Math.abs(a.d) - Math.abs(b.d);
+						return Math.abs(a.d - b.d);
 					});
 					
 					if (ship.alive){
-						// check if a bird flies out of bounds
+						// kill if a ship flies out of bounds
 						if (ship.y < 0 || ship.y > H || ship.x < 0 || ship.x > W) this.onDeath(ship);
 
 						var velocity = Math.sqrt(Math.pow(ship.body.velocity.x,2) + Math.pow(ship.body.velocity.y,2));
@@ -167,18 +181,18 @@ App.Main.prototype = {
 						var input = [
 							Math.radians(ship.body.rotation), // r
 							velocity / shipProperties.maxVelocity, // v%
-							asteroidDistance[0].dx,
-							asteroidDistance[0].dy,
+							asteroidDistance[0].dx, // dx1
+							asteroidDistance[0].dy, // dy1
 							asteroidDistance[1].dx,
 							asteroidDistance[1].dy,
 							asteroidDistance[2].dx,
 							asteroidDistance[2].dy
 						]; 
 
-						// perform a proper action (flap yes/no) for this bird by activating its neural network
-						if(ship.index === 0)
-							this.player(ship);
-						else 
+						// perform a proper action by activating its neural network
+						//if(ship.index === 0)
+						//	this.player(ship);
+						//else 
 							this.GA.activateBrain(ship, input);
 					}
 				}, this);
@@ -192,6 +206,7 @@ App.Main.prototype = {
 				this.GA.iteration++;
 
 				this.AsteroidGroup.removeAll();
+				this.BulletGroup.removeAll();
 					
 				this.state = this.STATE_START;
 				break;
@@ -212,6 +227,10 @@ App.Main.prototype = {
 		} else {
 			ship.gasOff();
 		}
+
+		if (this.key_fire.isDown) {
+			ship.shoot();
+		}
 	},
 
     checkBoundaries: function (sprite) {
@@ -226,46 +245,44 @@ App.Main.prototype = {
         } else if (sprite.y > H) {
             sprite.y = 0;
         }
-    },
+	},
+	
+	asteroidHit : function(bullet, asteroid){
+		bullet.logPoints();
+		bullet.kill();
+		asteroid.hit();
+	},
+
+	asteroidCollision : function(ship, asteroid){
+		this.onDeath(ship);
+		asteroid.hit();
+	},
 	
 	onDeath : function(ship){
-		this.GA.Population[ship.index].fitness = this.time + ship.score;
+		this.GA.Population[ship.index].fitness = (!ship.moved) ? ship.score : this.time * 10 + ship.score;
 		this.GA.Population[ship.index].score = ship.score;
 					
 		ship.death();
-		if (this.ShipGroup.countLiving() == 0) this.state = this.STATE_GAMEOVER;
-	}/*,
-	
-	onRestartClick : function(){
-		this.state = this.STATE_INIT;
-	},
-	
-	onPauseClick : function(){
-		this.game.paused = true;
-		this.btnPause.input.reset();
-		this.sprPause.revive();
-    },
-	
-	onResumeClick : function(){
-		if (this.game.paused){
-			this.game.paused = false;
-			this.btnPause.input.enabled = true;
-			this.sprPause.kill();
-		}
-    }*/
+		if (this.ShipGroup.countLiving() === 0) this.state = this.STATE_GAMEOVER;
+	}
 }
 
 /*******************************************************************************
 /* Asteroid Class extends Phaser.Sprite
 /******************************************************************************/
 
-var Asteroid = function(game, x, y, s, i, g) {
-	//make it so they start off screen and then glide in screen when x and y are -1
+var Asteroid = function(game, x, y, s, g) {
+	//make it so they start off screen and then glide in screen when x and y are 0
 	//make it so one goes directly toward the center to force out campers
+	var v = 0;
+	var a = 0;
+	if(x === 0 & y === H/2){
+		v = 300;
+		a = 0;
+	}
 	//other ones burst out of an asteroid that got shot so they retain xy
 	Phaser.Sprite.call(this, game, x, y, `imgAsteroid-${s}`);
 	this.size = s;
-	this.index = i;
 	this.group = g;
 
 	this.scale.setTo(.5, .5);
@@ -275,8 +292,8 @@ var Asteroid = function(game, x, y, s, i, g) {
 	this.anchor.set(0.5, 0.5);
 	this.body.angularVelocity = this.game.rnd.integerInRange(asteroidProperties.size[this.size].minAngularVelocity, asteroidProperties.size[this.size].maxAngularVelocity);
 
-	var randomAngle = this.game.math.degToRad(this.game.rnd.angle());
-	var randomVelocity = this.game.rnd.integerInRange(asteroidProperties.size[this.size].minVelocity, asteroidProperties.size[this.size].maxVelocity);
+	var randomAngle = (a != 0) ? a : this.game.math.degToRad(this.game.rnd.angle());
+	var randomVelocity = (v != 0) ? v :  this.game.rnd.integerInRange(asteroidProperties.size[this.size].minVelocity, asteroidProperties.size[this.size].maxVelocity);
 
 	game.physics.arcade.velocityFromRotation(randomAngle, randomVelocity, this.body.velocity);
 	
@@ -286,20 +303,28 @@ Asteroid.prototype = Object.create(Phaser.Sprite.prototype);
 Asteroid.prototype.constructor = Asteroid;
 
 Asteroid.prototype.hit = function(){
-	//add two asteroids to asteroid group
+	//add two asteroids to asteroid group if not smallest size
+	if(this.size != asteroidProperties.maxSize){
+		this.group.add(new Asteroid(this.game, this.body.x + this.body.halfWidth, this.body.y + this.body.halfHeight, this.size + 1, this.group));
+		this.group.add(new Asteroid(this.game, this.body.x + this.body.halfWidth, this.body.y + this.body.halfHeight, this.size + 1, this.group));
+	}
 	//kill this asteroid
+	this.kill();
 }
 
 /*******************************************************************************
 /* Ship Class extends Phaser.Sprite
 /******************************************************************************/
 
-var Ship = function(game, x, y, index) {
+var Ship = function(game, x, y, index, bulletGroup) {
 	Phaser.Sprite.call(this, game, x, y, 'imgShip');
 	this.index = index;
 	this.angle = -90;
 	this.anchor.set(0.5, 0.5);
 	this.score = 0;
+	this.moved = false;
+	this.fireable = true;
+	this.bullets = bulletGroup;
 	  
 	// add flap animation and start to play it
 	var i=index*2;
@@ -321,7 +346,8 @@ Ship.prototype.restart = function(iteration){
 };
 
 Ship.prototype.gas = function(){
-	this.score += 0.01;
+	this.moved = true;
+	this.score += 5;
 	this.animations.play('gas', 1, true);
 	this.game.physics.arcade.accelerationFromRotation(Math.radians(this.body.rotation), shipProperties.acceleration, this.body.acceleration);
 };
@@ -335,8 +361,27 @@ Ship.prototype.rotate = function(rotation){
 	this.body.angularVelocity = (.5 - rotation) * shipProperties.angularVelocity;
 }
 
+Ship.prototype.reload = function(){
+	var ship = this;
+	setTimeout(function(){
+		ship.fireable = true;
+	}, bulletProperties.interval);
+}
+
 Ship.prototype.shoot = function(){
-	//release a bullet sprite
+	if (!this.fireable)
+		return;
+		
+	this.fireable = false;
+	this.reload();
+
+	console.log("fire");
+	var length = this.body.width * 0.5;
+	var x = this.body.x + this.body.halfWidth;
+	var y = this.body.y + this.body.halfHeight;
+	this.bullets.add(new Bullet(this.game, x, y, Math.radians(this.body.rotation), this));
+	this.bulletInterval = this.game.time + bulletProperties.interval;
+	//}
 }
 
 Ship.prototype.death = function(){
@@ -344,4 +389,30 @@ Ship.prototype.death = function(){
 	this.kill();
 };
 
+/*******************************************************************************
+/* Bullet Class extends Phaser.Sprite
+/******************************************************************************/
+var Bullet = function(game, x, y, r, s) {
+	Phaser.Sprite.call(this, game, x, y, 'imgBullet');
+	this.scale.setTo(.5, .5);
+	
+	this.reset(x, y);
+	this.lifespan = bulletProperties.lifespan;
+	this.rotation = r;
+	this.ship = s;
 
+	this.animations.add('fire', [0, 1, 2]);
+	this.animations.play('fire', 8, true);
+
+	// enable physics on the bullet
+	this.game.physics.enable(this, Phaser.Physics.ARCADE);
+	this.game.physics.arcade.velocityFromRotation(r, bulletProperties.speed, this.body.velocity);
+};
+
+Bullet.prototype = Object.create(Phaser.Sprite.prototype);
+Bullet.prototype.constructor = Bullet;
+
+Bullet.prototype.logPoints = function(){
+	this.ship.score += asteroidProperties.score;
+	console.log(this.ship.index, this.ship.score);
+}
