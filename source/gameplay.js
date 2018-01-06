@@ -11,12 +11,24 @@ var shipProperties = {
 	acceleration: 220,
     drag: 160,
     maxVelocity: 220,
-    angularVelocity: 500,
+	angularVelocity: 500,
+	names: [
+		"Virgin Galactic",
+		"Amazon Prime Air",
+		"Spirit Airlines",
+		"Google Chrome",
+		"SpaceX",
+		"Blue Origin",
+		"Earlybird",
+		"Lyft",
+		"NASA",
+		"Boeing"
+	]
 };
 
 var bulletProperties = {
     speed: 400,
-    interval: 400,
+    interval: 600,
     lifespan: 640,
     maxCount: 90,
 }
@@ -138,6 +150,7 @@ App.Main.prototype = {
 				
 			case this.STATE_PLAY: // play Flappy Bird game by using genetic algorithm AI
 
+				this.BulletGroup.forEachExists(function(bullet){this.checkBoundaries(bullet);}, this);
 				this.game.physics.arcade.overlap(this.BulletGroup, this.AsteroidGroup, this.asteroidHit, null, this);
 				this.game.physics.arcade.overlap(this.ShipGroup, this.AsteroidGroup, this.asteroidCollision, null, this);
 
@@ -150,13 +163,9 @@ App.Main.prototype = {
 				}, this);
 				
 				this.ShipGroup.forEachAlive(function(ship){
+					this.checkBoundaries(ship);
 					
-					var asteroidDistance = [
-						{ d: ship.body.x - 0, dx: ship.body.x - 0, dy: 0},
-						{ d: ship.body.x - W, dx: ship.body.x - W, dy: 0},
-						{ d: ship.body.y - 0, dx: 0, dy: ship.body.y - H},
-						{ d: ship.body.y - H, dx: 0, dy: ship.body.y - H}
-					]; 
+					var asteroidDistance = [];
 					
 					// get the three closest asteroids
 					this.AsteroidGroup.forEachExists(function(asteroid){
@@ -173,8 +182,6 @@ App.Main.prototype = {
 					});
 					
 					if (ship.alive){
-						// kill if a ship flies out of bounds
-						if (ship.y < 0 || ship.y > H || ship.x < 0 || ship.x > W) this.onDeath(ship);
 
 						var velocity = Math.sqrt(Math.pow(ship.body.velocity.x,2) + Math.pow(ship.body.velocity.y,2));
 						
@@ -202,6 +209,8 @@ App.Main.prototype = {
 				break;
 				
 			case this.STATE_GAMEOVER: // when all birds are killed evolve the population
+				this.log();	
+
 				this.GA.evolvePopulation();
 				this.GA.iteration++;
 
@@ -211,6 +220,22 @@ App.Main.prototype = {
 				this.state = this.STATE_START;
 				break;
 		}
+	},
+
+	log: function(){
+		var ships = [];
+		var best = ["",0];
+		this.ShipGroup.forEach(function(ship){
+			var name = shipProperties.names[ship.index];
+			var fitness = Math.round(this.GA.Population[ship.index].fitness);
+			var ship = [name,fitness];
+			if(fitness > best[1])
+				best = ship;
+			ships.push(ship);			
+		}, this);
+		console.log("Iteration:", this.GA.iteration);
+		console.log("Best:", best[0], best[1]);
+		console.table(ships);
 	},
 
 	player : function(ship){
@@ -341,6 +366,8 @@ Ship.prototype = Object.create(Phaser.Sprite.prototype);
 Ship.prototype.constructor = Ship;
 
 Ship.prototype.restart = function(iteration){	
+	this.score = 0;
+	moved = false;
 	this.alpha = 1;
 	this.reset(CENTER_X, CENTER_Y);
 };
@@ -375,13 +402,11 @@ Ship.prototype.shoot = function(){
 	this.fireable = false;
 	this.reload();
 
-	console.log("fire");
 	var length = this.body.width * 0.5;
 	var x = this.body.x + this.body.halfWidth;
 	var y = this.body.y + this.body.halfHeight;
 	this.bullets.add(new Bullet(this.game, x, y, Math.radians(this.body.rotation), this));
 	this.bulletInterval = this.game.time + bulletProperties.interval;
-	//}
 }
 
 Ship.prototype.death = function(){
@@ -414,5 +439,4 @@ Bullet.prototype.constructor = Bullet;
 
 Bullet.prototype.logPoints = function(){
 	this.ship.score += asteroidProperties.score;
-	console.log(this.ship.index, this.ship.score);
 }
