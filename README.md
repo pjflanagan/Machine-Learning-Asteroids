@@ -6,11 +6,12 @@ which break into smaller asteroids. The game restarts with new AI's after
 all ships are destroyed.
 
 ## Run
-run `python -m SimpleHTTPServer` within the source folder.
+Run `python -m SimpleHTTPServer` within the source folder.
+Visit the page outputted. Add `?player=true` to play as the red fighter.
 
 ## Element Properties
 ### Asteroids
-Asteroids are worth 100 points at all sizes.
+Asteroids are worth the same amount of points at all sizes.
 
 ### Ships
 | Property      | Value         | 
@@ -18,15 +19,16 @@ Asteroids are worth 100 points at all sizes.
 | Max Velocity  | 220           | 
 
 ### Bullets
+Bullets cost the ship points when they hit nothing.
 | Property      | Value         | 
 | ------------- |:-------------:|
 | Speed         | 600           | 
 
 
 ## Neural Network
-The spaceship's brain has 8 input neurons:
+The spaceship's brain has 9 input neurons:
 - 1 representing the orientation
-- 1 representing the velocity
+- 2 representing the velocity in each direction
 - 6 representing the location of the 3 closest asteroids in relation to the ship
 
 The spaceship has 6 neurons in its hidden layer, and 4 in the output layer:
