@@ -31,12 +31,11 @@ var bulletProperties = {
     interval: 680,
     lifespan: 600,
     maxCount: 90,
-}
+};
 
 var asteroidProperties = {
-    startingAsteroids: 10,
+    startingAsteroids: 14,
     maxAsteroids: 30,
-	incrementAsteroids: 1,
 	maxSize: 2,
 	score: 100,
     
