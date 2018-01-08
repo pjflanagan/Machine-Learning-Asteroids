@@ -55,6 +55,7 @@ GeneticAlgorithm.prototype = {
 		else ship.gas();
 		if(outputs[1] > 0.5) ship.shoot();
 		if(outputs[2] > 0.5) ship.rotate(Math.round(outputs[3])); 
+		else ship.rotate(0.5); // no rotation
 	},
 	
 	// evolves the population by performing selection, crossover and mutations on the units

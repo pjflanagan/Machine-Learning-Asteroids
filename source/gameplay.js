@@ -3,11 +3,19 @@
 /******************************************************************************/
 
 var W = 1800;
-var H = 1200;
+var H = 1400;
 var CENTER_X = W/2,
 	CENTER_Y = H/2;
 
-var player = false;
+var playerStats = {
+	hitsPerTime: 0.005108160595824615,
+	movePerTime: 0.29899789971247337,
+	netRotationPerTime: 0.08307079199195985,
+	playing: false, 
+	shotsPerTime: 0.007633429477892699,
+	totalRotationPerTime: 0.23894501451554687
+}
+
 
 var shipProperties = {
 	acceleration: 320,
@@ -15,16 +23,8 @@ var shipProperties = {
     maxVelocity: 260,
 	angularVelocity: 500,
 	names: [
-		"Virgin Galactic",
-		"Amazon Prime Air",
-		"Spirit Airlines",
-		"Google Chrome",
-		"SpaceX",
-		"Blue Origin",
-		"Earlybird",
-		"Lyft",
-		"NASA",
-		"Boeing"
+		"Virgin Galactic", "Amazon Prime Air", "Spirit Airlines", "Google Chrome",
+		"SpaceX", "Blue Origin", "Earlybird", "Lyft", "NASA", "Boeing"
 	]
 };
 
@@ -55,7 +55,7 @@ Math.radians = function(degrees) {
 
 window.onload = function () {
 
-	player = gup("player");
+	playerStats.playing = gup("player");
 
 	var game = new Phaser.Game(W, H, Phaser.CANVAS, 'game');
 	
@@ -115,7 +115,7 @@ App.Main.prototype = {
 		// create a AsteroidGroup which contains a number of Asteroid objects
 		this.AsteroidGroup = this.game.add.group();
 		
-		// create keys for a regular player to play
+		// create keys for a human to play
 		this.key_left = this.game.input.keyboard.addKey(Phaser.Keyboard.LEFT);
         this.key_right = this.game.input.keyboard.addKey(Phaser.Keyboard.RIGHT);
 		this.key_thrust = this.game.input.keyboard.addKey(Phaser.Keyboard.UP);
@@ -159,9 +159,6 @@ App.Main.prototype = {
 
 				this.AsteroidGroup.forEachExists(function(asteroid){
 					this.checkBoundaries(asteroid);
-					// this.AsteroidGroup.forEachExists(function(asteroid_2){
-					// 	this.game.physics.arcade.collide(asteroid, asteroid_2);
-					// }, this);
 				}, this);
 				
 				this.ShipGroup.forEachAlive(function(ship){
@@ -205,7 +202,7 @@ App.Main.prototype = {
 						]);*/
 
 						// perform a proper action by activating its neural network
-						if(player && ship.index === 0) this.player(ship);
+						if(playerStats.playing && ship.index === 0) this.userMovement(ship);
 						else this.GA.activateBrain(ship, input);
 					}
 				}, this);
@@ -234,7 +231,7 @@ App.Main.prototype = {
 		var ave = 0;
 		this.ShipGroup.forEach(function(ship){
 			var name = shipProperties.names[ship.index];
-			var fitness = Math.round(this.GA.Population[ship.index].fitness);
+			var fitness = this.GA.Population[ship.index].fitness;
 			var ship = [name,fitness];
 			ave += fitness;
 			if(fitness > best[1])
@@ -247,7 +244,7 @@ App.Main.prototype = {
 		console.table(ships);
 	},
 
-	player : function(ship){
+	userMovement : function(ship){
 		if (this.key_left.isDown) ship.rotate(1);
 		else if (this.key_right.isDown) ship.rotate(0);
 		else ship.rotate(.5);
@@ -270,9 +267,9 @@ App.Main.prototype = {
 		bullet.addPoints();
 		bullet.kill();
 		asteroid.hit();
-		if(this.AsteroidGroup.countLiving() <= 5){
+		if(this.AsteroidGroup.countLiving() <= 8){
 			this.ShipGroup.forEachAlive(function(ship){
-				ship.onDeath();
+				this.onDeath(ship);
 			});
 		}
 	},
@@ -288,38 +285,54 @@ App.Main.prototype = {
 		if (this.ShipGroup.countLiving() === 0) this.state = this.STATE_GAMEOVER;
 	},
 
+	rankSimilarity : function(shipScore, playerScore){
+		return 1 - Math.abs(playerScore - shipScore);
+	},
+
+	runningAverage : function(currentData, newData){
+		return ((currentData * (this.GA.iteration - 1)) + newData) / this.GA.iteration;
+	},
+
 	calculateFitness : function(ship){
+		/*
 		// if they fire no shots, give them a score of 0, otherwise give them an 
 		// accuracty multiplier to try and prevent constant shooting
-		var minShotReward = (ship.trackers.shots === 0) ? 0 : ship.trackers.hits / ship.trackers.shots;
-
+		var shotReward = (ship.trackers.shots === 0) ? 0 : ship.trackers.hits / ship.trackers.shots;
 		// score for hitting asteroids as is the objective of the game
 		var score 		  = ship.trackers.hits * asteroidProperties.score;
-
 		// if they do not rotate, give them a score of zero
 		// if they rotate both directions pretty evenly then give them a 2 times multiplier
 		// otherwise divide the total time by how much rotation they did. If they
 		// were to rotate one direction the whole time they would only get a 1 multiplier
-		var minSpinReward = (!ship.trackers.hasRotated) ? 0 :
-							(ship.trackers.rotationSum === 0) ? 100 / 0.5 : 
-							100 / Math.abs(ship.trackers.rotationSum);
-
+		var spinReward = (!ship.trackers.totalRotations === 0) ? 0 :
+						 (ship.trackers.netRotation === 0) ? 100 / 0.5 : 
+						 100 / Math.abs(ship.trackers.netRotation);
 		// give the ship a reward for moving
-		var maxMoveReward = ship.trackers.movement;
-
+		var moveReward = -ship.trackers.movement * (ship.trackers.movement - this.time);
 		// give the ship a reward for staying alive longer
-		var maxTimeReward = this.time;
+		var timeReward = this.time;
+		return (shotReward * score) + (spinReward * moveReward) + timeReward;
+		*/
+		
+		var time = this.time * 1.000;
+		if(playerStats.playing && ship.index === 0){
+			playerStats.movePerTime = this.runningAverage(playerStats.movePerTime, ship.trackers.movement / time);
+			playerStats.shotsPerTime = this.runningAverage(playerStats.shotsPerTime, ship.trackers.shots / time);
+			playerStats.hitsPerTime = this.runningAverage(playerStats.hitsPerTime, ship.trackers.hits / time);
+			playerStats.netRotationPerTime = this.runningAverage(playerStats.netRotationPerTime, Math.abs(ship.trackers.netRotation / time));
+			playerStats.totalRotationPerTime = this.runningAverage(playerStats.totalRotationPerTime, ship.trackers.totalRotations / time);
+			console.log(playerStats);
+			return 0;
+		}
 
-		if(player && ship.index === 0)
-			console.table([
-				["Time", this.time],
-				["Score", score],
-				["Accuracy", minShotReward],
-				["Rotation Sum", ship.trackers.rotationSum],
-				["Movement", ship.trackers.movement]
-			]);
+		var movementSimilarity = this.rankSimilarity(ship.trackers.movement / time, playerStats.movePerTime),
+			shotsSimilarity = this.rankSimilarity(ship.trackers.shots / time, playerStats.shotsPerTime),
+			hitsSimilarity = this.rankSimilarity(ship.trackers.hits / time, playerStats.hitsPerTime),
+			netRotationSimilarity = this.rankSimilarity(Math.abs(ship.trackers.netRotation / time), playerStats.netRotationPerTime),
+			totalRotationSimilarity = this.rankSimilarity(ship.trackers.totalRotations / time, playerStats.totalRotationPerTime);
 
-		return (minShotReward * score) + (minSpinReward * maxMoveReward) + maxTimeReward;
+		return movementSimilarity * shotsSimilarity * hitsSimilarity * netRotationSimilarity * totalRotationSimilarity;
+		
 	}
 }
 
@@ -391,16 +404,16 @@ Ship.prototype.constructor = Ship;
 Ship.prototype.restart = function(iteration){
 	this.resetTrackers();
 	this.fireable = true;
-	this.reset(CENTER_X - 200 + Math.random() * 400, CENTER_Y - 200 + Math.random() * 400);
+	this.reset(CENTER_X - CENTER_X/2 + Math.random() * CENTER_X, CENTER_Y - CENTER_Y/2 + Math.random() * CENTER_Y);
 }
 
 Ship.prototype.resetTrackers = function(){
 	this.trackers = {
-		shots: 0,
-		hits: 0,
-		movement: 0,
-		hasRotated: false,
-		rotationSum: 0
+		shots: 0, //totalShots
+		hits: 0, //totalHits
+		movement: 0, //totalMovement
+		netRotation: 0,
+		totalRotations: 0
 		/*lines: [
 			new Phaser.Line(0, 0, 0, 0),
 			new Phaser.Line(0, 0, 0, 0),
@@ -421,8 +434,8 @@ Ship.prototype.gasOff = function(){
 }
 
 Ship.prototype.rotate = function(rotation){
-	this.trackers.hasRotated = true;
-	this.trackers.rotationSum += .5 - rotation;
+	if(rotation != 0.5) this.trackers.totalRotations += 1;
+	this.trackers.netRotation += 2 * (.5 - rotation);
 	this.body.angularVelocity = (.5 - rotation) * shipProperties.angularVelocity;
 }
 
