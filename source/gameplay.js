@@ -13,9 +13,11 @@ var playerStats = {
 	netRotationPerTime: 0.08307079199195985,
 	playing: false, 
 	shotsPerTime: 0.007633429477892699,
-	totalRotationPerTime: 0.23894501451554687
-}
+	totalRotationPerTime: 0.23894501451554687,
 
+	percentTimeAiming: 0,
+	averageAsteroidDistance: 0
+}
 
 var shipProperties = {
 	acceleration: 320,
@@ -36,7 +38,8 @@ var bulletProperties = {
 };
 
 var asteroidProperties = {
-    startingAsteroids: 14,
+	startingAsteroids: 8,
+	currentResetAsteroids: 8,
     maxAsteroids: 30,
 	maxSize: 2,
 	score: 100,
@@ -144,6 +147,7 @@ App.Main.prototype = {
 				}, this);
 
 				// init the asteroids
+				asteroidProperties.currentResetAsteroids = asteroidProperties.startingAsteroids;
 				for (var i = 0; i < asteroidProperties.startingAsteroids; i++){
 					this.AsteroidGroup.add(new Asteroid(this.game, 0, 0, 0, this.AsteroidGroup));
 				}
@@ -163,6 +167,8 @@ App.Main.prototype = {
 				
 				this.ShipGroup.forEachAlive(function(ship){
 					this.checkBoundaries(ship);
+
+					//make an auto kill if they haven't hit the gas in a while
 					
 					var asteroidDistance = [];
 					
@@ -171,7 +177,7 @@ App.Main.prototype = {
 						var dx = ship.body.x - asteroid.body.x, 
 							dy = ship.body.y - asteroid.body.y;
 						asteroidDistance.push({
-							d: Math.abs(Math.sqrt(dx*dx + dy+dy)),
+							d: Math.sqrt(dx*dx + dy*dy),
 							dx: dx,
 							dy: dy,
 							x: asteroid.body.x,
@@ -179,7 +185,7 @@ App.Main.prototype = {
 						});
 					}, this);
 					asteroidDistance.sort(function(a, b) {
-						return Math.abs(a.d - b.d);
+						return a.d - b.d;
 					});
 					
 					if (ship.alive){
@@ -195,11 +201,7 @@ App.Main.prototype = {
 							asteroidDistance[2].dy
 						]; 
 
-						/*ship.updateLines([
-							{x: asteroidDistance[0].x, y: asteroidDistance[0].y},
-							{x: asteroidDistance[1].x, y: asteroidDistance[1].y},
-							{x: asteroidDistance[2].x, y: asteroidDistance[2].y}
-						]);*/
+						ship.updateLines([asteroidDistance[0], asteroidDistance[1], asteroidDistance[2]]);
 
 						// perform a proper action by activating its neural network
 						if(playerStats.playing && ship.index === 0) this.userMovement(ship);
@@ -267,10 +269,11 @@ App.Main.prototype = {
 		bullet.addPoints();
 		bullet.kill();
 		asteroid.hit();
-		if(this.AsteroidGroup.countLiving() <= 8){
-			this.ShipGroup.forEachAlive(function(ship){
-				this.onDeath(ship);
-			});
+		if(this.AsteroidGroup.countLiving() <= asteroidProperties.startingAsteroids){
+			asteroidProperties.currentResetAsteroids += 4;
+			for (var i = this.AsteroidGroup.countLiving(); i < asteroidProperties.currentResetAsteroids; i++){
+				this.AsteroidGroup.add(new Asteroid(this.game, 0, 0, 0, this.AsteroidGroup));
+			}
 		}
 	},
 
@@ -313,25 +316,33 @@ App.Main.prototype = {
 		var timeReward = this.time;
 		return (shotReward * score) + (spinReward * moveReward) + timeReward;
 		*/
+
+		// RECORD TIME ACCURATE, RECORD TIME DISTANT FROM ASTEROID
 		
 		var time = this.time * 1.000;
 		if(playerStats.playing && ship.index === 0){
 			playerStats.movePerTime = this.runningAverage(playerStats.movePerTime, ship.trackers.movement / time);
 			playerStats.shotsPerTime = this.runningAverage(playerStats.shotsPerTime, ship.trackers.shots / time);
-			playerStats.hitsPerTime = this.runningAverage(playerStats.hitsPerTime, ship.trackers.hits / time);
+			playerStats.hitsPerTime = this.runningAverage(playerStats.hitsPerTime, ship.trackers.hits / time); 
 			playerStats.netRotationPerTime = this.runningAverage(playerStats.netRotationPerTime, Math.abs(ship.trackers.netRotation / time));
 			playerStats.totalRotationPerTime = this.runningAverage(playerStats.totalRotationPerTime, ship.trackers.totalRotations / time);
+			playerStats.averageAsteroidDistance = this.runningAverage(playerStats.averageAsteroidDistance, ship.trackers.averageAsteroidDistance / time);
 			console.log(playerStats);
 			return 0;
 		}
 
 		var movementSimilarity = this.rankSimilarity(ship.trackers.movement / time, playerStats.movePerTime),
 			shotsSimilarity = this.rankSimilarity(ship.trackers.shots / time, playerStats.shotsPerTime),
-			hitsSimilarity = this.rankSimilarity(ship.trackers.hits / time, playerStats.hitsPerTime),
+			accuracySimilarity = this.rankSimilarity(ship.trackers.hits / ship.trackers.shots, playerStats.hitsPerTime / playerStats.shotsPerTime),
 			netRotationSimilarity = this.rankSimilarity(Math.abs(ship.trackers.netRotation / time), playerStats.netRotationPerTime),
 			totalRotationSimilarity = this.rankSimilarity(ship.trackers.totalRotations / time, playerStats.totalRotationPerTime);
 
-		return movementSimilarity * shotsSimilarity * hitsSimilarity * netRotationSimilarity * totalRotationSimilarity;
+		return 	0.1  * time + 
+				100  * movementSimilarity + 
+				100  * shotsSimilarity + 
+				1000 * accuracySimilarity + 
+				100  * netRotationSimilarity + 
+				100  * totalRotationSimilarity;
 		
 	}
 }
@@ -352,12 +363,15 @@ var Asteroid = function(game, x, y, s, g) {
 	this.game.physics.arcade.enableBody(this, Phaser.Physics.ARCADE);
 
 	this.anchor.set(0.5, 0.5);
-	this.body.angularVelocity = this.game.rnd.integerInRange(asteroidProperties.size[this.size].minAngularVelocity, asteroidProperties.size[this.size].maxAngularVelocity);
+	this.body.angularVelocity = this.game.rnd.integerInRange(
+		asteroidProperties.size[this.size].minAngularVelocity, 
+		asteroidProperties.size[this.size].maxAngularVelocity
+	);
 
 	var randomAngle = this.game.math.degToRad(this.game.rnd.angle());
 	var randomVelocity = this.game.rnd.integerInRange(asteroidProperties.size[this.size].minVelocity, asteroidProperties.size[this.size].maxVelocity);
 
-	game.physics.arcade.velocityFromRotation(randomAngle, randomVelocity, this.body.velocity);
+	game.physics.arcade.velocityFromRotation(randomAngle, randomVelocity, this.body.velocity) * (this.size + 1);
 	
 };
 
@@ -413,7 +427,8 @@ Ship.prototype.resetTrackers = function(){
 		hits: 0, //totalHits
 		movement: 0, //totalMovement
 		netRotation: 0,
-		totalRotations: 0
+		totalRotations: 0,
+		averageAsteroidDistance: 0
 		/*lines: [
 			new Phaser.Line(0, 0, 0, 0),
 			new Phaser.Line(0, 0, 0, 0),
@@ -444,13 +459,13 @@ Ship.prototype.reload = function(){
 	setTimeout(function(){
 		ship.fireable = true;
 	}, bulletProperties.interval);
+	
 }
 
 Ship.prototype.shoot = function(){
-	if (!this.fireable)
-		return;
+	this.trackers.shots += 1;
 	
-	this.trackers.shots += 1;	
+	if (!this.fireable)return;
 	this.fireable = false;
 	this.reload();
 
@@ -463,14 +478,17 @@ Ship.prototype.death = function(){
 	this.kill();
 }
 
-/*Ship.prototype.updateLines = function(coords){
-	for(var i = 0; i < coords.length; ++i){
+Ship.prototype.updateLines = function(coords){
+
+	this.trackers.averageAsteroidDistance += (coords[0].d + coords[1].d + coords[2].d) / 3;
+	
+	/*for(var i = 0; i < coords.length; ++i){
 		this.trackers.lines[i].start.x = this.body.x;
 		this.trackers.lines[i].start.y = this.body.y;
 		this.trackers.lines[i].end.x = coords[i].x;
 		this.trackers.lines[i].end.y = coords[i].y;
-	}
-}*/
+	}*/
+}
 
 /*******************************************************************************
 /* Bullet Class extends Phaser.Sprite
