@@ -48,6 +48,7 @@ GeneticAlgorithm.prototype = {
 	// activates the neural network of an unit from the population 
 	// to calculate an output action according to the inputs
 	activateBrain : function(ship, inputs){		
+
 		// calculate outputs by activating synaptic neural network of this ship
 		var outputs = this.Population[ship.index].activate(inputs);
 
@@ -70,7 +71,7 @@ GeneticAlgorithm.prototype = {
 			// Playing as the God, we can destroy this bad population and try with another one.
 			this.createPopulation();
 		} else {
-			this.mutateRate = 0.2; // else set the mutatation rate to the real value
+			this.mutateRate = 0.36; // else set the mutatation rate to the real value
 		}
 			
 		// fill the rest of the next population with new units using crossover and mutation
