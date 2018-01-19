@@ -29,6 +29,16 @@ var shipProperties = {
 	names: [
 		"Virgin Galactic", "Amazon Prime Air", "Spirit Airlines", "Google Chrome",
 		"SpaceX", "Blue Origin", "Earlybird", "Lyft", "NASA", "Boeing"
+	],
+	sensors: [
+		0,
+		Math.PI * .25,
+		Math.PI * .5,
+		Math.PI * .75,
+		Math.PI,
+		Math.PI * 1.25,
+		Math.PI * 1.5,
+		Math.PI * 1.75,
 	]
 };
 
@@ -177,53 +187,9 @@ App.Main.prototype = {
 				
 				this.ShipGroup.forEachAlive(function(ship){
 					this.checkBoundaries(ship);
-
-					// auto kill if they haven't hit the gas in a while
-					if(this.time > shipProperties.offencePermitableTime){
-						if(ship.trackers.time - ship.trackers.lastMoveTime > shipProperties.offencePermitableTime){
-							ship.trackers.camper = true;
-							this.onDeath(ship);
-						}
-						else if(ship.trackers.time - ship.trackers.lastRotationChangeTime > shipProperties.offencePermitableTime){
-							ship.trackers.spinner = true;
-							this.onDeath(ship);
-						}
-					}
-					
-					var asteroidDistance = [];
-					
-					// get the three closest asteroids
-					this.AsteroidGroup.forEachExists(function(asteroid){
-						var dx = ship.body.x - asteroid.body.x, 
-							dy = ship.body.y - asteroid.body.y;
-						asteroidDistance.push({
-							delta: Math.sqrt(dx*dx + dy*dy),
-							theta: this.game.physics.arcade.angleBetween(ship, asteroid),
-							dx: dx,
-							dy: dy,
-							x: asteroid.body.x,
-							y: asteroid.body.y,
-							asteroid: asteroid
-						});
-					}, this);
-					asteroidDistance.sort(function(a, b) {
-						return a.delta - b.delta;
-					});
-					
 					if (ship.alive){
-						var input = [
-							Math.radians(ship.body.rotation), // rotation
-							ship.body.velocity.x, // vx
-							ship.body.velocity.y, // vy
-							asteroidDistance[0].delta, // dx
-							asteroidDistance[0].theta, // dy
-							asteroidDistance[1].delta,
-							asteroidDistance[1].theta,
-							asteroidDistance[2].delta,
-							asteroidDistance[2].theta
-						]; 
-
-						ship.updateLines([asteroidDistance[0], asteroidDistance[1], asteroidDistance[2]]);
+						this.runSensors(ship);
+						var input = ship.sensorReadings;
 
 						// perform a proper action by activating its neural network
 						if(playerStats.playing && ship.index === 0) this.userMovement(ship);
@@ -247,15 +213,6 @@ App.Main.prototype = {
 				this.state = this.STATE_START;
 				break;
 		}
-	},
-
-	render : function(){
-		this.ShipGroup.forEachAlive(function(ship){
-			for(var i = 0; i < 3; i++){
-				this.game.debug.geom(ship.trackers.lines[i]);
-			}
-		}, this);
-		
 	},
 
 	log : function(){
@@ -295,6 +252,22 @@ App.Main.prototype = {
         if (sprite.y < 0) sprite.y = H;
         else if (sprite.y > H) sprite.y = 0;
 	},
+
+	runSensors: function(ship){
+		var x = ship.body.x,
+			y = ship.body.y,
+			r = Math.radians(ship.body.rotation);
+		for(var s = 0; s < shipProperties.sensors.length; s++){
+			for(var d = 0; d < 600; d += 20){
+				x = ship.body.x + d * Math.cos(r + shipProperties.sensors[s]);
+				y = ship.body.y + d * Math.sin(r + shipProperties.sensors[s]);
+				if(this.game.physics.arcade.getObjectsAtLocation(x, y, this.AsteroidGroup).length > 0){
+					ship.sensorReadings[s] = d;
+					break;
+				}
+			}
+		}
+	},
 	
 	asteroidHit : function(bullet, asteroid){
 		bullet.addPoints();
@@ -319,69 +292,11 @@ App.Main.prototype = {
 		if (this.ShipGroup.countLiving() === 0) this.state = this.STATE_GAMEOVER;
 	},
 
-	rankSimilarity : function(shipScore, playerScore){
-		//use an upside parabola centered at playerScore instead
-		return 1 / (Math.abs(shipScore - playerScore) + 0.000001);
-	},
-
-	runningIterationAverage : function(currentData, newData){
-		return ((currentData * (this.GA.iteration - 1)) + newData) / this.GA.iteration;
-	},
-
 	calculateFitness : function(ship){
-		/*
-		// if they fire no shots, give them a score of 0, otherwise give them an 
-		// accuracty multiplier to try and prevent constant shooting
-		var shotReward = (ship.trackers.shots === 0) ? 0 : ship.trackers.hits / ship.trackers.shots;
-		// score for hitting asteroids as is the objective of the game
-		var score 		  = ship.trackers.hits * asteroidProperties.score;
-		// if they do not rotate, give them a score of zero
-		// if they rotate both directions pretty evenly then give them a 2 times multiplier
-		// otherwise divide the total time by how much rotation they did. If they
-		// were to rotate one direction the whole time they would only get a 1 multiplier
-		var spinReward = (!ship.trackers.totalRotations === 0) ? 0 :
-						 (ship.trackers.netRotation === 0) ? 100 / 0.5 : 
-						 100 / Math.abs(ship.trackers.netRotation);
-		// give the ship a reward for moving
-		var moveReward = -ship.trackers.movement * (ship.trackers.movement - this.time);
-		// give the ship a reward for staying alive longer
-		var timeReward = this.time;
-		return (shotReward * score) + (spinReward * moveReward) + timeReward;
-		*/
-
-		// RECORD TIME ACCURATE, RECORD TIME DISTANT FROM ASTEROID
-
-		if(ship.trackers.spinner || ship.trackers.camper || ship.trackers.movement === 0){
-			return 0;
-		}
-		
-		var time = this.time * 1.000;
-		if(playerStats.playing && ship.index === 0){
-			playerStats.movePerTime = this.runningIterationAverage(playerStats.movePerTime, ship.trackers.movement / time);
-			playerStats.shotsPerTime = this.runningIterationAverage(playerStats.shotsPerTime, ship.trackers.shots / time);
-			playerStats.hitsPerTime = this.runningIterationAverage(playerStats.hitsPerTime, ship.trackers.hits / time); 
-			playerStats.netRotationPerTime = this.runningIterationAverage(playerStats.netRotationPerTime, Math.abs(ship.trackers.netRotation / time));
-			playerStats.totalRotationPerTime = this.runningIterationAverage(playerStats.totalRotationPerTime, ship.trackers.totalRotations / time);
-			playerStats.averageAsteroidDistance = this.runningIterationAverage(playerStats.averageAsteroidDistance, ship.trackers.averageAsteroidDistance);
-			console.log(playerStats);
-			return 0;
-		}
-
-		var movementSimilarity = this.rankSimilarity(ship.trackers.movement / time, playerStats.movePerTime),
-			shotsSimilarity = this.rankSimilarity(ship.trackers.shots / time, playerStats.shotsPerTime),
-			accuracySimilarity = (ship.trackers.shots === 0) ? 0 :
-				this.rankSimilarity(ship.trackers.hits / ship.trackers.shots, playerStats.hitsPerTime / playerStats.shotsPerTime),
-			netRotationSimilarity = this.rankSimilarity(Math.abs(ship.trackers.netRotation / time), playerStats.netRotationPerTime),
-			totalRotationSimilarity = this.rankSimilarity(ship.trackers.totalRotations / time, playerStats.totalRotationPerTime);
-
-		return  100  * D / ship.trackers.averageAsteroidDistance + 
-				1000 * movementSimilarity + 
-				100  * shotsSimilarity + 
-				100  * accuracySimilarity + 
-				100  * netRotationSimilarity + 
-				100  * totalRotationSimilarity;
-
+		var accuracy = (ship.trackers.shots === 0) ? 0 : ship.trackers.hits / ship.trackers.shots;
+		return this.time * accuracy;
 	}
+
 }
 
 /*******************************************************************************
@@ -395,7 +310,7 @@ var Asteroid = function(game, x, y, s, g) {
 	this.size = s;
 	this.group = g;
 
-	this.scale.setTo(.5, .5);
+	this.scale.setTo(.64, .64);
 	
 	this.game.physics.arcade.enableBody(this, Phaser.Physics.ARCADE);
 
@@ -439,12 +354,12 @@ var Ship = function(game, x, y, index, bulletGroup) {
 	this.interval = 0;
 	this.restart();
 	  
-	// add flap animation and start to play it
+	// add gas animation as options
 	var i=index*2;
 	this.animations.add('gas', [i+1]);
 	this.animations.add('gasOff', [i]);
 
-	// enable physics on the bird
+	// enable physics on the ship
 	this.game.physics.enable(this, Phaser.Physics.ARCADE);
 	this.body.drag.set(shipProperties.drag);
 	this.body.maxVelocity.set(shipProperties.maxVelocity);
@@ -463,33 +378,11 @@ Ship.prototype.resetTrackers = function(){
 	this.trackers = {
 		shots: 0, //totalShots
 		hits: 0, //totalHits
-		
-		netRotation: 0,
-		totalRotations: 0,
-		lastRotation: 0,
-		lastRotationChangeTime: 0,
-		spinner: false,
-		
-		movement: 0, //totalMovement
-		lastMoveTime: 0,
-		lastVelocity: 0,
-		lastVelocityChangeTime: 0,
-		camper: false,
-
-		
-		time: 0,
-		averageAsteroidDistance: 0,
-		lines: [
-			new Phaser.Line(0, 0, 0, 0),
-			new Phaser.Line(0, 0, 0, 0),
-			new Phaser.Line(0, 0, 0, 0)
-		]
 	};
+	this.sensorReadings = [600,600,600,600,600,600,600,600];
 }
 
 Ship.prototype.gas = function(){
-	this.trackers.movement += 1;
-	this.trackers.lastMoveTime = this.trackers.time;
 	this.animations.play('gas', 1, true);
 	this.game.physics.arcade.accelerationFromRotation(Math.radians(this.body.rotation), shipProperties.acceleration, this.body.acceleration);
 }
@@ -500,12 +393,6 @@ Ship.prototype.gasOff = function(){
 }
 
 Ship.prototype.rotate = function(rotation){
-	if(rotation != 0.5) this.trackers.totalRotations += 1;
-	if(this.trackers.lastRotation != rotation) {
-		this.trackers.lastRotationChangeTime = this.trackers.time;
-		this.trackers.lastRotation = rotation;
-	}
-	this.trackers.netRotation += 2 * (.5 - rotation);
 	this.body.angularVelocity = (.5 - rotation) * shipProperties.angularVelocity;
 }
 
@@ -532,21 +419,6 @@ Ship.prototype.shoot = function(){
 Ship.prototype.death = function(){
 	clearTimeout(this.interval);
 	this.kill();
-}
-
-Ship.prototype.updateLines = function(coords){
-	this.trackers.time += 1;
-
-	var currentAsteroidDistance = (coords[0].delta + coords[1].delta + coords[2].delta) / 3;
-	this.trackers.averageAsteroidDistance = this.runningTimeAverage(this.trackers.averageAsteroidDistance, currentAsteroidDistance);
-	
-	for(var i = 0; i < 3; ++i){
-		this.trackers.lines[i].fromSprite(this, coords[i].asteroid, false);
-	}
-}
-
-Ship.prototype.runningTimeAverage = function(currentData, newData){
-	return ((currentData * (this.trackers.time - 1)) + newData) / this.trackers.time;
 }
 
 /*******************************************************************************

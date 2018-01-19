@@ -26,10 +26,8 @@ Bullets cost the ship points when they hit nothing.
 
 
 ## Neural Network
-The spaceship's brain has 9 input neurons:
-- 1 representing the orientation
-- 2 representing the velocity in each direction
-- 6 representing the location of the 3 closest asteroids in relation to the ship
+The spaceship's brain has 8 input neurons, which recieve the distance to the
+closest asteroid in each direction.
 
 The spaceship has 6 neurons in its hidden layer, and 4 in the output layer:
 1. accelerates when greater than 0.5 and coasts otherwise
