@@ -31,14 +31,14 @@ var shipProperties = {
 		"SpaceX", "Blue Origin", "Earlybird", "Lyft", "NASA", "Boeing"
 	],
 	sensors: [
-		0,
-		Math.PI * .25,
-		Math.PI * .5,
-		Math.PI * .75,
-		Math.PI,
-		Math.PI * 1.25,
-		Math.PI * 1.5,
-		Math.PI * 1.75,
+		{ i: 0, a: 0 },
+		{ i: 0, a: Math.PI * .25 },
+		{ i: 0, a: Math.PI * .5 },
+		{ i: 0, a: Math.PI * .75 },
+		{ i: 0, a: Math.PI },
+		{ i: 0, a: Math.PI * 1.25 },
+		{ i: 0, a: Math.PI * 1.5 },
+		{ i: 0, a: Math.PI * 1.75 }
 	]
 };
 
@@ -124,7 +124,7 @@ App.Main.prototype = {
 		this.game.physics.startSystem(Phaser.Physics.ARCADE);
 		
 		// create a new Genetic Algorithm with a population of 10 units which will be evolving by using 4 top units
-		this.GA = new GeneticAlgorithm(10, 4);
+		this.GA = new GeneticAlgorithm(5, 2);
 
 		// create a BulletGroup which contians the bullets
 		this.BulletGroup = this.game.add.group();
@@ -175,7 +175,7 @@ App.Main.prototype = {
 				this.state = this.STATE_PLAY;
 				break;
 				
-			case this.STATE_PLAY: // play Flappy Bird game by using genetic algorithm AI
+			case this.STATE_PLAY: // play the game
 
 				this.BulletGroup.forEachExists(function(bullet){this.checkBoundaries(bullet);}, this);
 				this.game.physics.arcade.overlap(this.BulletGroup, this.AsteroidGroup, this.asteroidHit, null, this);
@@ -201,7 +201,7 @@ App.Main.prototype = {
 				this.time += 1;
 				break;
 				
-			case this.STATE_GAMEOVER: // when all birds are killed evolve the population
+			case this.STATE_GAMEOVER: // when all ships are killed evolve the population
 				this.log();	
 
 				this.GA.evolvePopulation();
@@ -257,16 +257,17 @@ App.Main.prototype = {
 		var x = ship.body.x,
 			y = ship.body.y,
 			r = Math.radians(ship.body.rotation);
-		for(var s = 0; s < shipProperties.sensors.length; s++){
-			for(var d = 0; d < 600; d += 20){
-				x = ship.body.x + d * Math.cos(r + shipProperties.sensors[s]);
-				y = ship.body.y + d * Math.sin(r + shipProperties.sensors[s]);
-				if(this.game.physics.arcade.getObjectsAtLocation(x, y, this.AsteroidGroup).length > 0){
-					ship.sensorReadings[s] = d;
-					break;
+		var phaser = this;
+		_.each(shipProperties.sensors, function(sensor){
+			for(var d = 0; d < 600; d += 8){ 
+				x = ship.body.x + d * Math.cos(r + sensor.a);
+				y = ship.body.y + d * Math.sin(r + sensor.a);
+				if(phaser.game.physics.arcade.getObjectsAtLocation(x, y, phaser.AsteroidGroup).length > 0){
+					ship.sensorReadings[sensor.i] = d;
+					return;
 				}
 			}
-		}
+		});
 	},
 	
 	asteroidHit : function(bullet, asteroid){
