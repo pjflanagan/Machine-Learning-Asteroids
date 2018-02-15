@@ -19,9 +19,12 @@ var playerStats = {
 	percentTimeAiming: 0
 }
 
-// Converts from degrees to radians.
+/*******************************************************************************
+/* Math
+/******************************************************************************/
+
 Math.radians = function(degrees) {
-	return degrees * Math.PI / 180;
+	return degrees * Math.PI / 180; // Converts from degrees to radians
 };
 Math.PI_2 = 2 * Math.PI;
 Math.toroidal = function(x,y){
@@ -29,7 +32,17 @@ Math.toroidal = function(x,y){
 	v2 = Math.cos(x / W * Math.PI_2);
 	v3 = Math.sin(y / H * Math.PI_2);
 	v4 = Math.cos(y / H * Math.PI_2);
-}
+};
+Math.rankSimilarity = function(shipScore, playerScore){
+	return 1 / (Math.abs(shipScore - playerScore) + 0.000001); 
+};
+Math.runningIterationAverage = function(currentData, newData){
+	return ((currentData * (this.GA.iteration - 1)) + newData) / this.GA.iteration;
+};
+
+/*******************************************************************************
+/* Onload
+/******************************************************************************/
 
 window.onload = function () {
 	playerStats.playing = gup("player");
@@ -86,10 +99,10 @@ App.Main.prototype = {
 		this.AsteroidGroup = this.game.add.group(); // create a AsteroidGroup which contains a number of Asteroid objects
 		
 		// create keys for a human to play
-		this.key_left = this.game.input.keyboard.addKey(Phaser.Keyboard.LEFT);
-        this.key_right = this.game.input.keyboard.addKey(Phaser.Keyboard.RIGHT);
-		this.key_thrust = this.game.input.keyboard.addKey(Phaser.Keyboard.UP);
-		this.key_fire = this.game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+		this.keyLeft = this.game.input.keyboard.addKey(Phaser.Keyboard.LEFT);
+        this.keyRight = this.game.input.keyboard.addKey(Phaser.Keyboard.RIGHT);
+		this.keyThrust = this.game.input.keyboard.addKey(Phaser.Keyboard.UP);
+		this.keyFire = this.game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
 				
 		// set initial App state
 		this.state = this.STATE_INIT;
@@ -191,14 +204,14 @@ App.Main.prototype = {
 	/* User Movement
 	/**************************************************************************/
 	userMovement : function(ship){
-		if (this.key_left.isDown) ship.rotate(1);
-		else if (this.key_right.isDown) ship.rotate(0);
+		if (this.keyLeft.isDown) ship.rotate(1);
+		else if (this.keyRight.isDown) ship.rotate(0);
 		else ship.rotate(.5);
 		
-		if (this.key_thrust.isDown) ship.gas();
+		if (this.keyThrust.isDown) ship.gas();
 		else ship.gasOff();
 		
-		if (this.key_fire.isDown) ship.shoot();
+		if (this.keyFire.isDown) ship.shoot();
 	},
 
 	/***************************************************************************
@@ -281,14 +294,6 @@ App.Main.prototype = {
 	},
 
 	/***************************************************************************
-	/* Rank Similarity
-	/**************************************************************************/
-	rankSimilarity : function(shipScore, playerScore){
-		//use an upside parabola centered at playerScore instead
-		return 1 / (Math.abs(shipScore - playerScore) + 0.000001);
-	},
-
-	/***************************************************************************
 	/* Calculate Fitness
 	/**************************************************************************/
 	calculateFitness : function(ship){
@@ -300,21 +305,21 @@ App.Main.prototype = {
 		
 		var time = this.time * 1.000;
 		if(playerStats.playing && ship.index === 0){
-			playerStats.movePerTime = this.runningIterationAverage(playerStats.movePerTime, ship.trackers.movement / time);
-			playerStats.shotsPerTime = this.runningIterationAverage(playerStats.shotsPerTime, ship.trackers.shots / time);
-			playerStats.hitsPerTime = this.runningIterationAverage(playerStats.hitsPerTime, ship.trackers.hits / time); 
-			playerStats.netRotationPerTime = this.runningIterationAverage(playerStats.netRotationPerTime, Math.abs(ship.trackers.netRotation / time));
-			playerStats.totalRotationPerTime = this.runningIterationAverage(playerStats.totalRotationPerTime, ship.trackers.totalRotations / time);
+			playerStats.movePerTime = Math.runningIterationAverage(playerStats.movePerTime, ship.trackers.movement / time);
+			playerStats.shotsPerTime = Math.runningIterationAverage(playerStats.shotsPerTime, ship.trackers.shots / time);
+			playerStats.hitsPerTime = Math.runningIterationAverage(playerStats.hitsPerTime, ship.trackers.hits / time); 
+			playerStats.netRotationPerTime = Math.runningIterationAverage(playerStats.netRotationPerTime, Math.abs(ship.trackers.netRotation / time));
+			playerStats.totalRotationPerTime = Math.runningIterationAverage(playerStats.totalRotationPerTime, ship.trackers.totalRotations / time);
 			console.log(playerStats);
 			return 0;
 		}
 
-		var movementSimilarity = this.rankSimilarity(ship.trackers.movement / time, playerStats.movePerTime),
-			shotsSimilarity = this.rankSimilarity(ship.trackers.shots / time, playerStats.shotsPerTime),
+		var movementSimilarity = Math.rankSimilarity(ship.trackers.movement / time, playerStats.movePerTime),
+			shotsSimilarity = Math.rankSimilarity(ship.trackers.shots / time, playerStats.shotsPerTime),
 			accuracySimilarity = (ship.trackers.shots === 0) ? 0 :
-				this.rankSimilarity(ship.trackers.hits / ship.trackers.shots, playerStats.hitsPerTime / playerStats.shotsPerTime),
-			netRotationSimilarity = this.rankSimilarity(Math.abs(ship.trackers.netRotation / time), playerStats.netRotationPerTime),
-			totalRotationSimilarity = this.rankSimilarity(ship.trackers.totalRotations / time, playerStats.totalRotationPerTime);
+				Math.rankSimilarity(ship.trackers.hits / ship.trackers.shots, playerStats.hitsPerTime / playerStats.shotsPerTime),
+			netRotationSimilarity = Math.rankSimilarity(Math.abs(ship.trackers.netRotation / time), playerStats.netRotationPerTime),
+			totalRotationSimilarity = Math.rankSimilarity(ship.trackers.totalRotations / time, playerStats.totalRotationPerTime);
 
 		return  1000 * movementSimilarity + 
 				100  * shotsSimilarity + 
