@@ -16,59 +16,14 @@ var playerStats = {
 	shotsPerTime: 0.007633429477892699,
 	totalRotationPerTime: 0.23894501451554687,
 
-	percentTimeAiming: 0,
-	averageAsteroidDistance: 0
+	percentTimeAiming: 0
 }
-
-var shipProperties = {
-	acceleration: 320,
-    drag: 40,
-    maxVelocity: 260,
-	angularVelocity: 500,
-	offencePermitableTime: 600,
-	names: [
-		"Virgin Galactic", "Amazon Prime Air", "Spirit Airlines", "Google Chrome",
-		"SpaceX", "Blue Origin", "Earlybird", "Lyft", "NASA", "Boeing"
-	],
-	sensors: [
-		{ i: 0, a: 0 },
-		{ i: 0, a: Math.PI * .25 },
-		{ i: 0, a: Math.PI * .5 },
-		{ i: 0, a: Math.PI * .75 },
-		{ i: 0, a: Math.PI },
-		{ i: 0, a: Math.PI * 1.25 },
-		{ i: 0, a: Math.PI * 1.5 },
-		{ i: 0, a: Math.PI * 1.75 }
-	]
-};
-
-var bulletProperties = {
-    speed: 600,
-    interval: 420,
-    lifespan: 600,
-    maxCount: 90,
-};
-
-var asteroidProperties = {
-	startingAsteroids: 8,
-	currentResetAsteroids: 8,
-    maxAsteroids: 30,
-	maxSize: 2,
-	score: 100,
-    
-    size: [
-		{ minVelocity: 80, maxVelocity: 120, minAngularVelocity: 0, maxAngularVelocity: 200 },
-    	{ minVelocity: 80, maxVelocity: 180, minAngularVelocity: 0, maxAngularVelocity: 200 },
-		{ minVelocity: 80, maxVelocity: 220, minAngularVelocity: 0, maxAngularVelocity: 200 }
-	]
-};
 
 // Converts from degrees to radians.
 Math.radians = function(degrees) {
 	return degrees * Math.PI / 180;
 };
 Math.PI_2 = 2 * Math.PI;
-
 Math.toroidal = function(x,y){
 	v1 = Math.sin(x / W * Math.PI_2);
 	v2 = Math.cos(x / W * Math.PI_2);
@@ -77,11 +32,8 @@ Math.toroidal = function(x,y){
 }
 
 window.onload = function () {
-
 	playerStats.playing = gup("player");
-
 	var game = new Phaser.Game(W, H, Phaser.CANVAS, 'game');
-	
 	game.state.add('Main', App.Main);
 	game.state.start('Main');
 };
@@ -100,6 +52,9 @@ App.Main = function(game){
 }
 
 App.Main.prototype = {
+	/***************************************************************************
+	/* Preload (member overload)
+	/**************************************************************************/
 	preload : function(){
 		this.game.load.spritesheet('imgShip', 'assets/img_ship.png', 36, 36, 20);
 		this.game.load.spritesheet('imgAsteroid-0', 'assets/img_asteroid_0.png', 344, 334, 1);	
@@ -108,35 +63,27 @@ App.Main.prototype = {
 		this.game.load.spritesheet('imgBullet', 'assets/img_bullet.png', 18, 18, 3);		
 	},
 	
+	/***************************************************************************
+	/* Create (member overload)
+	/**************************************************************************/
 	create : function(){
 		// set scale mode to cover the entire screen
 		this.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
 		this.scale.pageAlignVertically = true;
 		this.scale.pageAlignHorizontally = true;
 
-		// set a black color for the background of the stage
-		this.game.stage.backgroundColor = "#1C1C1C";
-		
-		// keep game running if it loses the focus
-		this.game.stage.disableVisibilityChange = true;
-		
-		// start the Phaser arcade physics engine
-		this.game.physics.startSystem(Phaser.Physics.ARCADE);
+		this.game.stage.backgroundColor = "#1C1C1C"; // set a black color for the background of the stage
+		this.game.stage.disableVisibilityChange = true; // keep game running if it loses the focus
+		this.game.physics.startSystem(Phaser.Physics.ARCADE); // start the Phaser arcade physics engine
 		
 		// create a new Genetic Algorithm with a population of 10 units which will be evolving by using 4 top units
-		this.GA = new GeneticAlgorithm(5, 2);
-
-		// create a BulletGroup which contians the bullets
-		this.BulletGroup = this.game.add.group();
-		
-		// create a ShipGroup which contains a number of Ship objects
-		this.ShipGroup = this.game.add.group();
+		this.GA = new GeneticAlgorithm(10, 4);
+		this.BulletGroup = this.game.add.group(); // create a BulletGroup which contians the bullets
+		this.ShipGroup = this.game.add.group(); // create a ShipGroup which contains a number of Ship objects
 		for (var i = 0; i < this.GA.max_units; i++){
 			this.ShipGroup.add(new Ship(this.game, CENTER_X, CENTER_Y, i, this.BulletGroup));
-		}		
-	
-		// create a AsteroidGroup which contains a number of Asteroid objects
-		this.AsteroidGroup = this.game.add.group();
+		}
+		this.AsteroidGroup = this.game.add.group(); // create a AsteroidGroup which contains a number of Asteroid objects
 		
 		// create keys for a human to play
 		this.key_left = this.game.input.keyboard.addKey(Phaser.Keyboard.LEFT);
@@ -148,23 +95,28 @@ App.Main.prototype = {
 		this.state = this.STATE_INIT;
 	},
 	
+	/***************************************************************************
+	/* Update (member overload)
+	/**************************************************************************/
 	update : function(){		
 		switch(this.state){
-			case this.STATE_INIT: // init genetic algorithm
+			/*******************************************************************
+			/* INIT
+			/******************************************************************/
+			case this.STATE_INIT: 
 				this.GA.reset();
 				this.GA.createPopulation();
-				
 				this.state = this.STATE_START;
 				break;
 				
-			case this.STATE_START: // start/restart the game
-				// update text objects
-				this.time = 0;
+			/*******************************************************************
+			/* START
+			/******************************************************************/
+			case this.STATE_START: 
+				this.time = 0; // update time objects
 				
 				// start a new population of ships
-				this.ShipGroup.forEach(function(ship){
-					ship.restart(this.GA.iteration);
-				}, this);
+				this.ShipGroup.forEach(function(ship){ ship.restart(this.GA.iteration); }, this);
 
 				// init the asteroids
 				asteroidProperties.currentResetAsteroids = asteroidProperties.startingAsteroids;
@@ -174,47 +126,48 @@ App.Main.prototype = {
 							
 				this.state = this.STATE_PLAY;
 				break;
-				
-			case this.STATE_PLAY: // play the game
-
+			
+			/*******************************************************************
+			/* PLAY
+			/******************************************************************/
+			case this.STATE_PLAY:
 				this.BulletGroup.forEachExists(function(bullet){this.checkBoundaries(bullet);}, this);
+				this.AsteroidGroup.forEachExists(function(asteroid){this.checkBoundaries(asteroid);}, this);
 				this.game.physics.arcade.overlap(this.BulletGroup, this.AsteroidGroup, this.asteroidHit, null, this);
 				this.game.physics.arcade.overlap(this.ShipGroup, this.AsteroidGroup, this.asteroidCollision, null, this);
 
-				this.AsteroidGroup.forEachExists(function(asteroid){
-					this.checkBoundaries(asteroid);
-				}, this);
-				
 				this.ShipGroup.forEachAlive(function(ship){
+					this.autoKill(ship);
 					this.checkBoundaries(ship);
 					if (ship.alive){
 						this.runSensors(ship);
 						var input = ship.sensorReadings;
-
 						// perform a proper action by activating its neural network
 						if(playerStats.playing && ship.index === 0) this.userMovement(ship);
 						else this.GA.activateBrain(ship, input);
 					}
 				}, this);
 				
-				// increase the time alive
-				this.time += 1;
+				this.time += 1; // increase the time alive
 				break;
-				
-			case this.STATE_GAMEOVER: // when all ships are killed evolve the population
+			
+			/*******************************************************************
+			/* GAMEOVER
+			/******************************************************************/
+			case this.STATE_GAMEOVER: 
 				this.log();	
-
 				this.GA.evolvePopulation();
 				this.GA.iteration++;
-
 				this.AsteroidGroup.removeAll();
 				this.BulletGroup.removeAll();
-					
 				this.state = this.STATE_START;
 				break;
 		}
 	},
 
+	/***************************************************************************
+	/* Log
+	/**************************************************************************/
 	log : function(){
 		var ships = [];
 		var best = ["",0];
@@ -234,6 +187,9 @@ App.Main.prototype = {
 		console.table(ships);
 	},
 
+	/***************************************************************************
+	/* User Movement
+	/**************************************************************************/
 	userMovement : function(ship){
 		if (this.key_left.isDown) ship.rotate(1);
 		else if (this.key_right.isDown) ship.rotate(0);
@@ -245,6 +201,9 @@ App.Main.prototype = {
 		if (this.key_fire.isDown) ship.shoot();
 	},
 
+	/***************************************************************************
+	/* Cheack Boundaries
+	/**************************************************************************/
     checkBoundaries: function (sprite) {
         if (sprite.x < 0) sprite.x = W;
 		else if (sprite.x > W) sprite.x = 0;
@@ -253,13 +212,16 @@ App.Main.prototype = {
         else if (sprite.y > H) sprite.y = 0;
 	},
 
+	/***************************************************************************
+	/* Run Sensors
+	/**************************************************************************/
 	runSensors: function(ship){
 		var x = ship.body.x,
 			y = ship.body.y,
 			r = Math.radians(ship.body.rotation);
 		var phaser = this;
 		_.each(shipProperties.sensors, function(sensor){
-			for(var d = 0; d < 600; d += 8){ 
+			for(var d = 0; d < 300; d += 8){ 
 				x = ship.body.x + d * Math.cos(r + sensor.a);
 				y = ship.body.y + d * Math.sin(r + sensor.a);
 				if(phaser.game.physics.arcade.getObjectsAtLocation(x, y, phaser.AsteroidGroup).length > 0){
@@ -270,9 +232,11 @@ App.Main.prototype = {
 		});
 	},
 	
+	/***************************************************************************
+	/* Asteroid Hit
+	/**************************************************************************/
 	asteroidHit : function(bullet, asteroid){
-		bullet.addPoints();
-		bullet.kill();
+		bullet.hit();
 		asteroid.hit();
 		if(this.AsteroidGroup.countLiving() <= asteroidProperties.startingAsteroids){
 			asteroidProperties.currentResetAsteroids += 4;
@@ -282,171 +246,89 @@ App.Main.prototype = {
 		}
 	},
 
+	/***************************************************************************
+	/* Asteroid Collision
+	/**************************************************************************/
 	asteroidCollision : function(ship, asteroid){
 		this.onDeath(ship);
 		asteroid.hit();
 	},
 	
+	/***************************************************************************
+	/* Auto Kill
+	/**************************************************************************/
+	autoKill : function(ship){
+		// auto kill if they haven't hit the gas in a while
+		if(this.time > shipProperties.offencePermitableTime){
+			if(ship.trackers.time - ship.trackers.lastMoveTime > shipProperties.offencePermitableTime){
+				ship.trackers.camper = true;
+				this.onDeath(ship);
+			}
+			else if(ship.trackers.time - ship.trackers.lastRotationChangeTime > shipProperties.offencePermitableTime){
+				ship.trackers.spinner = true;
+				this.onDeath(ship);
+			}
+		}
+	},
+
+	/***************************************************************************
+	/* On Death
+	/**************************************************************************/
 	onDeath : function(ship){
 		this.GA.Population[ship.index].fitness = this.calculateFitness(ship);
 		ship.death();
 		if (this.ShipGroup.countLiving() === 0) this.state = this.STATE_GAMEOVER;
 	},
 
+	/***************************************************************************
+	/* Rank Similarity
+	/**************************************************************************/
+	rankSimilarity : function(shipScore, playerScore){
+		//use an upside parabola centered at playerScore instead
+		return 1 / (Math.abs(shipScore - playerScore) + 0.000001);
+	},
+
+	/***************************************************************************
+	/* Calculate Fitness
+	/**************************************************************************/
 	calculateFitness : function(ship){
-		var accuracy = (ship.trackers.shots === 0) ? 0 : ship.trackers.hits / ship.trackers.shots;
-		return this.time * accuracy;
+		// RECORD TIME ACCURATE, RECORD TIME DISTANT FROM ASTEROID
+
+		if(ship.trackers.spinner || ship.trackers.camper || ship.trackers.movement === 0){
+			return 0;
+		}
+		
+		var time = this.time * 1.000;
+		if(playerStats.playing && ship.index === 0){
+			playerStats.movePerTime = this.runningIterationAverage(playerStats.movePerTime, ship.trackers.movement / time);
+			playerStats.shotsPerTime = this.runningIterationAverage(playerStats.shotsPerTime, ship.trackers.shots / time);
+			playerStats.hitsPerTime = this.runningIterationAverage(playerStats.hitsPerTime, ship.trackers.hits / time); 
+			playerStats.netRotationPerTime = this.runningIterationAverage(playerStats.netRotationPerTime, Math.abs(ship.trackers.netRotation / time));
+			playerStats.totalRotationPerTime = this.runningIterationAverage(playerStats.totalRotationPerTime, ship.trackers.totalRotations / time);
+			console.log(playerStats);
+			return 0;
+		}
+
+		var movementSimilarity = this.rankSimilarity(ship.trackers.movement / time, playerStats.movePerTime),
+			shotsSimilarity = this.rankSimilarity(ship.trackers.shots / time, playerStats.shotsPerTime),
+			accuracySimilarity = (ship.trackers.shots === 0) ? 0 :
+				this.rankSimilarity(ship.trackers.hits / ship.trackers.shots, playerStats.hitsPerTime / playerStats.shotsPerTime),
+			netRotationSimilarity = this.rankSimilarity(Math.abs(ship.trackers.netRotation / time), playerStats.netRotationPerTime),
+			totalRotationSimilarity = this.rankSimilarity(ship.trackers.totalRotations / time, playerStats.totalRotationPerTime);
+
+		return  1000 * movementSimilarity + 
+				100  * shotsSimilarity + 
+				100  * accuracySimilarity + 
+				100  * netRotationSimilarity + 
+				100  * totalRotationSimilarity;
+
 	}
 
 }
 
-/*******************************************************************************
-/* Asteroid Class extends Phaser.Sprite
-/******************************************************************************/
 
-var Asteroid = function(game, x, y, s, g) {
-	//make it so they start off screen and then glide in screen when x and y are 0
-	//other ones burst out of an asteroid that got shot so they retain xy
-	Phaser.Sprite.call(this, game, x, y, `imgAsteroid-${s}`);
-	this.size = s;
-	this.group = g;
 
-	this.scale.setTo(.64, .64);
-	
-	this.game.physics.arcade.enableBody(this, Phaser.Physics.ARCADE);
 
-	this.anchor.set(0.5, 0.5);
-	this.body.angularVelocity = this.game.rnd.integerInRange(
-		asteroidProperties.size[this.size].minAngularVelocity, 
-		asteroidProperties.size[this.size].maxAngularVelocity
-	);
 
-	var randomAngle = this.game.math.degToRad(this.game.rnd.angle());
-	var randomVelocity = this.game.rnd.integerInRange(asteroidProperties.size[this.size].minVelocity, asteroidProperties.size[this.size].maxVelocity);
 
-	game.physics.arcade.velocityFromRotation(randomAngle, randomVelocity, this.body.velocity) * (this.size + 1);
-	
-};
-
-Asteroid.prototype = Object.create(Phaser.Sprite.prototype);
-Asteroid.prototype.constructor = Asteroid;
-
-Asteroid.prototype.hit = function(){
-	//add two asteroids to asteroid group if not smallest size
-	if(this.size != asteroidProperties.maxSize){
-		this.group.add(new Asteroid(this.game, this.body.x + this.body.halfWidth, this.body.y + this.body.halfHeight, this.size + 1, this.group));
-		this.group.add(new Asteroid(this.game, this.body.x + this.body.halfWidth, this.body.y + this.body.halfHeight, this.size + 1, this.group));
-	}
-	//kill this asteroid
-	this.kill();
-}
-
-/*******************************************************************************
-/* Ship Class extends Phaser.Sprite
-/******************************************************************************/
-
-var Ship = function(game, x, y, index, bulletGroup) {
-	Phaser.Sprite.call(this, game, x, y, 'imgShip');
-	this.index = index;
-	this.angle = -90;
-	this.anchor.set(0.5, 0.5);
-	this.bullets = bulletGroup;
-	this.fireable = false;
-	this.interval = 0;
-	this.restart();
-	  
-	// add gas animation as options
-	var i=index*2;
-	this.animations.add('gas', [i+1]);
-	this.animations.add('gasOff', [i]);
-
-	// enable physics on the ship
-	this.game.physics.enable(this, Phaser.Physics.ARCADE);
-	this.body.drag.set(shipProperties.drag);
-	this.body.maxVelocity.set(shipProperties.maxVelocity);
-};
-
-Ship.prototype = Object.create(Phaser.Sprite.prototype);
-Ship.prototype.constructor = Ship;
-
-Ship.prototype.restart = function(iteration){
-	this.resetTrackers();
-	this.fireable = true;
-	this.reset(CENTER_X - CENTER_X/2 + Math.random() * CENTER_X, CENTER_Y - CENTER_Y/2 + Math.random() * CENTER_Y);
-}
-
-Ship.prototype.resetTrackers = function(){
-	this.trackers = {
-		shots: 0, //totalShots
-		hits: 0, //totalHits
-	};
-	this.sensorReadings = [600,600,600,600,600,600,600,600];
-}
-
-Ship.prototype.gas = function(){
-	this.animations.play('gas', 1, true);
-	this.game.physics.arcade.accelerationFromRotation(Math.radians(this.body.rotation), shipProperties.acceleration, this.body.acceleration);
-}
-
-Ship.prototype.gasOff = function(){
-	this.animations.play('gasOff', 1, true);
-	this.body.acceleration.set(0);
-}
-
-Ship.prototype.rotate = function(rotation){
-	this.body.angularVelocity = (.5 - rotation) * shipProperties.angularVelocity;
-}
-
-Ship.prototype.reload = function(){
-	var ship = this;
-	this.interval = setTimeout(function(){
-		ship.fireable = true;
-	}, bulletProperties.interval);
-	
-}
-
-Ship.prototype.shoot = function(){
-	this.trackers.shots += 1;
-	
-	if (!this.fireable)return;
-	this.fireable = false;
-	this.reload();
-
-	var x = this.body.x + this.body.halfWidth;
-	var y = this.body.y + this.body.halfHeight;
-	this.bullets.add(new Bullet(this.game, x, y, Math.radians(this.body.rotation), this));
-}
-
-Ship.prototype.death = function(){
-	clearTimeout(this.interval);
-	this.kill();
-}
-
-/*******************************************************************************
-/* Bullet Class extends Phaser.Sprite
-/******************************************************************************/
-var Bullet = function(game, x, y, r, s) {
-	Phaser.Sprite.call(this, game, x, y, 'imgBullet');
-	this.scale.setTo(.25, .25);
-	this.anchor.setTo(.5, .5);
-	
-	this.reset(x, y);
-	this.lifespan = bulletProperties.lifespan;
-	this.rotation = r;
-	this.ship = s;
-
-	this.animations.add('fire', [0, 1, 2]);
-	this.animations.play('fire', 8, true);
-
-	// enable physics on the bullet
-	this.game.physics.enable(this, Phaser.Physics.ARCADE);
-	this.game.physics.arcade.velocityFromRotation(r, bulletProperties.speed, this.body.velocity);
-};
-
-Bullet.prototype = Object.create(Phaser.Sprite.prototype);
-Bullet.prototype.constructor = Bullet;
-
-Bullet.prototype.addPoints = function(){
-	this.ship.trackers.hits += 1;
-}
 
